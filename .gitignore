@@ -1,0 +1,45 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Environment variables — KHONG BAO GIO COMMIT
+.env
+.env.local
+.env.production
+
+# FastAPI / Uvicorn
+*.log
+
+# Alembic
+# (giữ migrations/ nhưng bỏ __pycache__ bên trong)
+migrations/__pycache__/
+
+# Node / React
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# PowerPoint tạm (không cần track)
+*.pptx
