@@ -1,4 +1,4 @@
-﻿# HackFlow — Thiết kế Cơ sở Dữ liệu Chi tiết
+# HackFlow — Thiết kế Cơ sở Dữ liệu Chi tiết
 
 > **Hệ quản trị CSDL:** PostgreSQL  
 > **Quy ước đặt tên:** `snake_case`, khoá chính luôn là `id` (UUID hoặc SERIAL), khoá ngoại dạng `<bang_tham_chieu>_id`
@@ -17,7 +17,10 @@ users
  │                       └──< evaluations >──< evaluation_details >── scoring_criteria
  │                       └──< support_tickets >──< ticket_messages
  │
+ ├── refresh_tokens                              (phiên đăng nhập)
+ │
 hackathon_config (singleton)
+announcements                                   (tin tức BTC)
 scoring_criteria
 topics ──< subtopics ──< topic_mentors >── users (mentor)
 ```
@@ -381,26 +384,29 @@ topics ──< subtopics ──< topic_mentors >── users (mentor)
 
 | # | Tên bảng | Nhóm | Mô tả ngắn |
 |:---:|---|---|---|
-| 1 | `users` | Người dùng | Tất cả tài khoản (4 role) |
-| 2 | `hackathon_config` | Cấu hình | Thông tin cuộc thi (singleton) |
-| 3 | `teams` | Đội thi | Thông tin đội |
-| 4 | `team_members` | Đội thi | Thành viên đội (nhiều-nhiều) |
-| 5 | `topics` | Đề tài | Chủ đề lớn |
-| 6 | `subtopics` | Đề tài | Chủ đề nhỏ (đơn vị đội thi chọn) |
-| 7 | `topic_mentors` | Đề tài | Phân công mentor theo chủ đề |
-| 8 | `team_topic_selection` | Đề tài | Đội thi chọn đề tài nào |
-| 9 | `checkpoints` | Nộp bài | Mốc nộp bài do BTC tạo |
-| 10 | `checkpoint_submissions` | Nộp bài | Lịch sử nộp bài checkpoint |
-| 11 | `final_submissions` | Nộp bài | Bài nộp sản phẩm cuối |
-| 12 | `scoring_criteria` | Chấm điểm | Tiêu chí chấm điểm (động) |
-| 13 | `judge_assignments` | Chấm điểm | Phân công giám khảo — đội |
-| 14 | `evaluations` | Chấm điểm | Phiên chấm của 1 giám khảo cho 1 đội |
-| 15 | `evaluation_details` | Chấm điểm | Điểm từng tiêu chí |
-| 16 | `support_tickets` | Hỗ trợ | Ticket câu hỏi từ thí sinh |
-| 17 | `ticket_messages` | Hỗ trợ | Hội thoại trong ticket |
-| 18 | `notifications` | Thông báo | Thông báo hệ thống |
+| 1 | `users` | Người dùng & Auth | Tất cả tài khoản (4 role) |
+| 2 | `refresh_tokens` | Người dùng & Auth | Phiên đăng nhập, gia hạn JWT |
+| 3 | `hackathon_config` | Cấu hình | Thông tin cuộc thi (singleton) |
+| 4 | `announcements` | Cấu hình | Tin tức / bài đăng từ BTC |
+| 5 | `teams` | Đội thi | Thông tin đội |
+| 6 | `team_members` | Đội thi | Thành viên đội (nhiều-nhiều) |
+| 7 | `topics` | Đề tài | Chủ đề lớn |
+| 8 | `subtopics` | Đề tài | Chủ đề nhỏ (đơn vị đội thi chọn) |
+| 9 | `topic_mentors` | Đề tài | Phân công mentor theo chủ đề |
+| 10 | `team_topic_selection` | Đề tài | Đội thi chọn đề tài (closed mode) |
+| 11 | `team_proposals` | Đề tài | Đội đề xuất ý tưởng (open/hybrid mode) |
+| 12 | `checkpoints` | Nộp bài | Mốc nộp bài do BTC tạo |
+| 13 | `checkpoint_submissions` | Nộp bài | Lịch sử nộp bài checkpoint |
+| 14 | `final_submissions` | Nộp bài | Bài nộp sản phẩm cuối + Commit SHA |
+| 15 | `scoring_criteria` | Chấm điểm | Tiêu chí chấm điểm (động, có trọng số) |
+| 16 | `judge_assignments` | Chấm điểm | Phân công giám khảo — đội |
+| 17 | `evaluations` | Chấm điểm | Phiên chấm của 1 giám khảo cho 1 đội |
+| 18 | `evaluation_details` | Chấm điểm | Điểm từng tiêu chí |
+| 19 | `support_tickets` | Hỗ trợ | Ticket câu hỏi từ thí sinh |
+| 20 | `ticket_messages` | Hỗ trợ | Hội thoại trong ticket |
+| 21 | `notifications` | Thông báo | Thông báo cá nhân tự động |
 
-**Tổng: 18 bảng**
+**Tổng: 21 bảng**
 
 ---
 

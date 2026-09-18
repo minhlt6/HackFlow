@@ -1,4 +1,4 @@
-﻿# AGENT.md — Quy tắc & Hướng dẫn làm việc dự án HackFlow
+# AGENT.md — Quy tắc & Hướng dẫn làm việc dự án HackFlow
 
 > File này là "luật" bắt buộc đọc trước khi bắt đầu code.
 > Mọi AI agent, thành viên nhóm và contributor đều phải tuân thủ.
@@ -208,20 +208,58 @@ git checkout -b feature/ten-tinh-nang
 git add .
 git commit -m "feat(checkpoint): add time-gated submission endpoint"
 
-# Bước 4: Đẩy nhánh lên remote
+# Bước 4: [XEM MỤC 3.5] Báo cáo và XIN XÁC NHẬN trước khi push
+# Bước 5: Sau khi được xác nhận → đẩy nhánh lên remote
 git push origin feature/ten-tinh-nang
 
-# Bước 5: Tạo Pull Request trên GitHub
+# Bước 6: Tạo Pull Request trên GitHub
 # Title: [Feature] Tên tính năng
 # Description: Mô tả ngắn những gì đã làm
 
-# Bước 6: Sau khi review OK → Merge vào master
+# Bước 7: Sau khi review OK → Merge vào master
 # (Ưu tiên dùng "Squash and merge" để giữ master sạch)
 
-# Bước 7: Xóa nhánh feature sau khi merge
+# Bước 8: Xóa nhánh feature sau khi merge
 git branch -d feature/ten-tinh-nang
 git push origin --delete feature/ten-tinh-nang
 ```
+
+### 3.5 ⚠️ QUY TẮC BẮT BUỘC — Xác nhận trước khi Push
+
+> **Áp dụng cho cả thành viên nhóm lẫn AI agent. Không có ngoại lệ.**
+
+**KHÔNG ĐƯỢC chạy bất kỳ lệnh `git push` nào khi chưa có sự xác nhận rõ ràng từ chủ dự án (minhlt6).**
+
+#### Quy trình xin xác nhận (bắt buộc thực hiện đủ 2 bước):
+
+**Bước 1 — Báo cáo rõ những gì sắp push:**
+```
+📦 Chuẩn bị push lên GitHub:
+
+Nhánh  : feature/ten-tinh-nang → origin
+Commit : feat(topics): add topic selection with concurrency lock
+Files  :
+  - backend/app/api/v1/topics.py   [modified]
+  - backend/app/services/topic_service.py  [new]
+  - backend/tests/test_topics.py   [new]
+
+Bạn có muốn push lên GitHub không?
+```
+
+**Bước 2 — Chờ xác nhận rõ ràng:**
+- ✅ Được push khi nhận được: **"ok"**, **"được"**, **"push đi"**, **"đẩy lên đi"**, hoặc bất kỳ câu nào có ý nghĩa xác nhận.
+- ❌ Không push nếu chưa nhận được xác nhận — kể cả khi đang trong giữa một luồng làm việc.
+- 🔄 Nếu bị yêu cầu sửa thêm → sửa xong, báo lại và xin xác nhận từ đầu.
+
+#### Bảng phán quyết nhanh:
+
+| Tình huống | Hành động |
+|---|---|
+| Được bảo **"làm tính năng X"** | Code → báo cáo → **hỏi trước khi push** |
+| Được bảo **"push đi"** / **"ok"** | ✅ Được push |
+| Được bảo **"sửa lại chỗ Y"** | Sửa → báo cáo lại → **hỏi lại trước khi push** |
+| Không nhận được phản hồi | ❌ **Dừng lại, không push** |
+| Tự thấy cần push để "tiện" | ❌ **Không được — phải hỏi** |
 
 ### 3.4 Quy tắc commit message (Conventional Commits)
 
@@ -516,6 +554,7 @@ pytest --cov=app tests/
 [ ] Logic phức tạp đã có comment giải thích (tiếng Anh hoặc tiếng Việt đều OK)
 [ ] Đã test thủ công tính năng trên local trước khi push
 [ ] Commit message theo đúng format Conventional Commits
+[ ] ⚠️ ĐÃ BÁO CÁO nội dung thay đổi và NHẬN XÁC NHẬN từ minhlt6 trước khi push (xem mục 3.5)
 ```
 
 ---

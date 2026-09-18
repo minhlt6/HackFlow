@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- HackFlow — Script khởi tạo toàn bộ CSDL
 -- Hệ quản trị: PostgreSQL (Supabase)
 -- Chạy file này 1 lần duy nhất khi setup project
@@ -394,6 +394,52 @@ CREATE TRIGGER set_updated_at_evaluations
     FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
 
 -- ============================================================
+-- NHÓM 9: TIN TỨC / THÔNG BÁO TỪ BTC
+-- ============================================================
+
+CREATE TABLE announcements (
+    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_by    UUID         NOT NULL REFERENCES users(id) ON DELETE RESTRICT,  -- Admin đăng bài
+    title         VARCHAR(500) NOT NULL,
+    content       TEXT         NOT NULL,                -- Nội dung bài đăng (hỗ trợ Markdown)
+    cover_url     VARCHAR(500),                         -- Ảnh bìa (tuỳ chọn)
+    is_pinned     BOOLEAN      NOT NULL DEFAULT FALSE,  -- Ghim lên đầu bảng tin
+    is_published  BOOLEAN      NOT NULL DEFAULT FALSE,  -- Draft hay đã xuất bản
+    published_at  TIMESTAMPTZ,                          -- Thời điểm xuất bản (NULL nếu còn draft)
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_announcements_published ON announcements(is_published, published_at DESC);
+CREATE INDEX idx_announcements_pinned    ON announcements(is_pinned) WHERE is_pinned = TRUE;
+
+CREATE TRIGGER set_updated_at_announcements
+    BEFORE UPDATE ON announcements
+    FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- ============================================================
+-- NHÓM 10: PHIÊN ĐĂNG NHẬP (Refresh Token)
+-- ============================================================
+
+CREATE TABLE refresh_tokens (
+    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash    VARCHAR(255) NOT NULL UNIQUE,         -- Lưu hash của token, không lưu raw
+    device_info   VARCHAR(500),                         -- Trình duyệt, hệ điều hành (tuỳ chọn)
+    ip_address    VARCHAR(45),                          -- IPv4 hoặc IPv6
+    expires_at    TIMESTAMPTZ  NOT NULL,                -- Thời điểm hết hạn (thường 30 ngày)
+    revoked       BOOLEAN      NOT NULL DEFAULT FALSE,  -- Token bị thu hồi (đăng xuất thủ công)
+    revoked_at    TIMESTAMPTZ,                          -- Thời điểm thu hồi
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_refresh_tokens_user_id    ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+-- Index partial: chỉ giữ token còn hiệu lực để truy vấn nhanh
+CREATE INDEX idx_refresh_tokens_active     ON refresh_tokens(user_id, expires_at)
+    WHERE revoked = FALSE;
+
+-- ============================================================
 -- DỮ LIỆU MẪU (Seed data — chỉ dùng cho môi trường development)
 -- Bỏ comment phần này nếu muốn có dữ liệu test sẵn
 -- ============================================================
@@ -420,7 +466,7 @@ INSERT INTO scoring_criteria (name, description, max_score, weight, display_orde
 
 -- ============================================================
 -- KIỂM TRA SAU KHI CHẠY
--- Chạy query này để xác nhận tất cả bảng đã được tạo:
+-- Chạy query này để xác nhận tất cả 21 bảng đã được tạo:
 -- ============================================================
 /*
 SELECT table_name
