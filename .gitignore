@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -15,6 +15,11 @@ env/
 .env
 .env.local
 .env.production
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # FastAPI / Uvicorn
 *.log
@@ -43,3 +48,7 @@ htmlcov/
 
 # PowerPoint tạm (không cần track)
 *.pptx
+
+# File ghi chú cá nhân / tóm tắt nội bộ (không push)
+ly_do_trien_khai_rut_gon.md
+

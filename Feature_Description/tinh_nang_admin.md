@@ -49,7 +49,40 @@ Quản lý toàn bộ mốc thời gian của cuộc thi. Sau khi thiết lập,
 
 ---
 
-## 5. Quản lý Đội thi & Phê duyệt đăng ký
+## 5. Phê duyệt Tài khoản Thí sinh *(Tính năng mới)*
+> Kiểm soát chất lượng người tham gia: chỉ thí sinh được BTC xác nhận mới có thể sử dụng hệ thống.
+
+### Luồng hoạt động:
+1. Thí sinh tự đăng ký qua form `/login` (tab "Đăng ký thí sinh").
+2. Tài khoản được tạo với trạng thái `pending` — **chưa đăng nhập được**.
+3. Thí sinh gửi email xác nhận danh tính cho BTC (hệ thống cung cấp nút mailto tự điền template).
+4. Admin vào tab **"Duyệt TK"** trong Dashboard để xem danh sách chờ duyệt.
+5. Admin nhấn **[Phê duyệt]** → tài khoản chuyển sang `approved`, thí sinh đăng nhập được ngay.
+6. Admin nhấn **[Từ chối]** → tài khoản bị `rejected`, thí sinh nhận thông báo khi đăng nhập.
+
+### Thông tin hiển thị mỗi tài khoản chờ duyệt:
+- Họ và tên
+- Mã sinh viên *(nếu có)*
+- Email đã đăng ký
+- Thời điểm đăng ký
+
+### Trạng thái tài khoản (`approval_status`):
+| Trạng thái | Ý nghĩa | Hành động đăng nhập |
+|---|---|---|
+| `approved` | Được phê duyệt | ✅ Đăng nhập bình thường |
+| `pending` | Chờ BTC duyệt | ❌ Màn hình chờ duyệt |
+| `rejected` | BTC từ chối | ❌ Thông báo bị từ chối |
+
+> **Lưu ý:** Tài khoản `admin`, `judge`, `mentor` luôn có `approval_status = approved` (không bị ảnh hưởng bởi cơ chế này).
+
+### API liên quan:
+- `GET /api/v1/admin/pending-users` → Danh sách tài khoản đang chờ duyệt
+- `POST /api/v1/admin/users/{user_id}/approve` → Phê duyệt tài khoản
+- `POST /api/v1/admin/users/{user_id}/reject` → Từ chối tài khoản
+
+---
+
+## 6. Quản lý Đội thi & Phê duyệt đăng ký
 Admin có thể xem và quản lý danh sách tất cả các đội đã đăng ký:
 
 - **Xem danh sách đội:** Hiển thị tên đội, số thành viên, đề tài đã chọn (nếu có), trạng thái (Chờ duyệt / Đã duyệt / Bị từ chối).
@@ -76,7 +109,42 @@ Admin tạo và quản lý danh sách đề tài để các đội lựa chọn.
 
 ---
 
-## 7. Quản lý Checkpoint
+## 7. Thống kê Lựa chọn Đề tài (Dashboard Đề tài)
+Màn hình thống kê trực quan giúp Admin nắm toàn bộ tình trạng đăng ký đề tài của các đội thi. Đây là công cụ để phát hiện đề tài bị bỏ trống, đề tài bị quá tải, và hỗ trợ quyết định điều phối.
+
+### Bảng tổng quan (Nhìn nhanh):
+- **Tổng số đội đã chọn đề tài** / Tổng số đội đã được duyệt.
+- **Tổng số đề tài còn trống** (chưa có đội nào đăng ký).
+- **Đề tài gần hết suất** (còn 1 suất cuối).
+
+### Biểu đồ phân bố đề tài:
+- **Biểu đồ cột / thanh ngang:** Mỗi chủ đề lớn là một nhóm cột, mỗi cột con là một chủ đề nhỏ. Chiều cao cột = số đội đã chọn đề tài đó. Màu cột thay đổi theo mức độ lấp đầy (xanh lá = còn trống, vàng = gần đủ, đỏ = đã hết).
+- **Chú thích ngay trên cột:** Hiển thị `[x / tối đa]` (ví dụ: `2 / 3 suất`).
+
+### Bảng chi tiết từng đề tài:
+Danh sách dạng bảng, mỗi hàng là một chủ đề nhỏ:
+
+| Chủ đề lớn | Chủ đề nhỏ | Mentor phụ trách | Số đội đăng ký | Tối đa | Trạng thái | Danh sách đội |
+|---|---|---|---|---|---|---|
+
+- **Cột Trạng thái:** `🟢 Còn suất` / `🟡 Gần đủ` / `🔴 Đã hết` / `⬜ Trống`.
+- **Cột Danh sách đội:** Nhấn vào để xổ ra danh sách tên các đội đã chọn đề tài đó, kèm thời điểm đăng ký.
+- **Bộ lọc:** Lọc theo chủ đề lớn, lọc theo trạng thái (Còn suất / Hết suất / Trống).
+- **Sắp xếp:** Theo số đội đăng ký (nhiều → ít / ít → nhiều), theo tên chủ đề.
+
+### Danh sách đội chưa chọn đề tài:
+- Hiển thị danh sách các đội đã được duyệt nhưng **chưa chọn đề tài**.
+- Mỗi hàng: Tên đội, thời gian được duyệt, nhóm trưởng (email liên hệ).
+- Nút **[Xuất danh sách]**: Xuất ra file CSV để gửi nhắc nhở hàng loạt.
+
+### API / Backend cần hỗ trợ:
+- `GET /api/admin/topics/stats` → Trả về JSON thống kê số đội đăng ký theo từng sub-topic.
+- `GET /api/admin/topics/:subTopicId/teams` → Danh sách đội đã chọn đề tài đó.
+- `GET /api/admin/teams/no-topic` → Danh sách đội chưa chọn đề tài.
+
+---
+
+## 8. Quản lý Checkpoint
 Tạo và quản lý các mốc nộp bài định kỳ trong quá trình làm sản phẩm:
 
 ### Thông tin mỗi checkpoint:
@@ -84,6 +152,8 @@ Tạo và quản lý các mốc nộp bài định kỳ trong quá trình làm s
 - **Mô tả & yêu cầu chi tiết:** Các đội cần nộp gì, định dạng nào (link GitHub, link slide, link video,...).
 - **Thời gian bắt đầu nhận bài:** Trước mốc này, nút nộp bài bị ẩn hoàn toàn.
 - **Thời gian kết thúc (Deadline):** Sau mốc này, nút nộp bài bị khóa, không thể chỉnh sửa.
+- **Điểm cho từng checkpoint ** Điểm này sẽ được cộng cho các đội thi nếu đội này nộp đúng thời hạn , đưa ra cơ chế trừ nếu nộp muộn hoặc không nộp.
+- Đưa thêm vào cơ chế block ( có thể bật tắt ) đưa vào số lượng checkpoint liên tiếp không nộp sẽ bị block khỏi hệ thống .
 
 ### Quản lý trạng thái nộp bài:
 - Xem danh sách các đội đã nộp / chưa nộp cho từng checkpoint.
@@ -91,7 +161,7 @@ Tạo và quản lý các mốc nộp bài định kỳ trong quá trình làm s
 
 ---
 
-## 8. Quản lý Tiêu chí Chấm điểm
+## 9. Quản lý Tiêu chí Chấm điểm
 Tạo và quản lý bộ tiêu chí chấm điểm động. Mỗi cuộc thi có thể có bộ tiêu chí riêng, không cần sửa code:
 
 - **Tên tiêu chí** *(bắt buộc)* (ví dụ: "Tính đột phá của ý tưởng")
@@ -103,7 +173,7 @@ Tạo và quản lý bộ tiêu chí chấm điểm động. Mỗi cuộc thi c�
 
 ---
 
-## 9. Quản lý Mentor
+## 10. Quản lý Mentor
 Thêm mentor vào hệ thống và phân công theo chủ đề:
 
 - **Thêm mentor:** Nhập email mentor. Hệ thống tự gửi email mời và cấp tài khoản đăng nhập (username + password tạm thời).
@@ -112,7 +182,7 @@ Thêm mentor vào hệ thống và phân công theo chủ đề:
 
 ---
 
-## 10. Quản lý Giám khảo
+## 11. Quản lý Giám khảo
 Thêm giám khảo vào hệ thống và phân công chấm thi:
 
 - **Thêm giám khảo:** Nhập email. Hệ thống gửi email mời và cấp tài khoản.
@@ -120,7 +190,7 @@ Thêm giám khảo vào hệ thống và phân công chấm thi:
 
 ---
 
-## 11. Xem kết quả & Xuất dữ liệu
+## 12. Xem kết quả & Xuất dữ liệu
 - **Bảng xếp hạng tổng:** Xem điểm tổng của tất cả đội thi, sắp xếp từ cao xuống thấp. Lọc theo trạng thái đã chấm đầy đủ hay chưa.
 - **Xem chi tiết điểm từng đội:** Điểm từng tiêu chí từ từng giám khảo, nhận xét.
 - **Xuất dữ liệu (Export CSV):** Xuất toàn bộ bảng điểm, danh sách đội, thông tin thành viên ra file CSV/Excel để lưu trữ hồ sơ chính thức.

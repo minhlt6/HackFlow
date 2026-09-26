@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* ── Light theme adaptation for dark surfaces across all HackFlow pages ── */
+.bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+.bg-slate-900,
+.bg-slate-900\/95,
+.bg-slate-900\/90,
+.bg-slate-900\/80,
+.bg-slate-900\/70,
+.bg-slate-900\/60,
+.bg-slate-900\/40 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+}
+
+.bg-slate-800,
+.bg-slate-800\/80,
+.bg-slate-800\/60,
+.bg-slate-800\/40 {
+  background-color: #f1f5f9 !important;
+}
+
+.bg-slate-950\/40,
+.bg-slate-950\/60,
+.bg-slate-950\/70 {
+  background-color: #f8fafc !important;
+}
+
+/* Borders */
+.border-slate-900,
+.border-slate-800,
+.border-slate-800\/80,
+.border-slate-800\/50,
+.border-slate-800\/40 {
+  border-color: #e2e8f0 !important;
+}
+
+.border-slate-700,
+.border-slate-700\/80,
+.border-slate-700\/50 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Typography contrast */
+.text-slate-100 {
+  color: #0f172a !important;
+}
+
+.text-slate-200 {
+  color: #1e293b !important;
+}
+
+.text-slate-300 {
+  color: #334155 !important;
+}
+
+.text-slate-400 {
+  color: #64748b !important;
+}
+
+/* Ensure headings inside adapted cards are dark */
+.bg-slate-900 h1, .bg-slate-900 h2, .bg-slate-900 h3, .bg-slate-900 h4,
+.bg-slate-950 h1, .bg-slate-950 h2, .bg-slate-950 h3, .bg-slate-950 h4,
+.bg-white h1, .bg-white h2, .bg-white h3, .bg-white h4 {
+  color: #0f172a;
+}
+
+/* In light theme, general text-white inside converted dark surfaces becomes dark,
+   EXCEPT inside buttons, badges, pills, and links with colored backgrounds */
+.bg-slate-900:not(button):not(a) > span.text-white,
+.bg-slate-900:not(button):not(a) > div.text-white,
+.bg-slate-950:not(button):not(a) > span.text-white,
+.bg-slate-950:not(button):not(a) > div.text-white {
+  color: #0f172a;
+}
+
+/* Explicit white text on solid colored buttons */
+button.text-white,
+button.text-white *,
+a.text-white,
+a.text-white * {
+  color: #ffffff !important;
+}
+
+/* Solid colored buttons keep white text */
+button[class*="bg-emerald-600"],
+button[class*="bg-emerald-700"],
+button[class*="bg-blue-600"],
+button[class*="bg-blue-700"],
+button[class*="bg-indigo-600"],
+button[class*="bg-purple-600"],
+button[class*="bg-rose-600"],
+button[class*="bg-red-600"],
+button[class*="bg-amber-600"],
+a[class*="bg-emerald-600"],
+a[class*="bg-blue-600"],
+a[class*="bg-purple-600"] {
+  color: #ffffff;
+}
+
+button[class*="bg-emerald-600"] *,
+button[class*="bg-emerald-700"] *,
+button[class*="bg-blue-600"] *,
+button[class*="bg-blue-700"] *,
+button[class*="bg-indigo-600"] *,
+button[class*="bg-purple-600"] *,
+button[class*="bg-rose-600"] *,
+button[class*="bg-red-600"] *,
+button[class*="bg-amber-600"] *,
+a[class*="bg-emerald-600"] *,
+a[class*="bg-blue-600"] *,
+a[class*="bg-purple-600"] * {
+  color: #ffffff;
+}
+
+/* Tab buttons and navigation: instantaneous transition, zero text blur or color fading */
+button[role="tab"],
+nav button,
+aside button,
+.tab-btn,
+.tab-button,
+[data-tab="true"] {
+  transition: none !important;
+}
+
+/* Inputs, Textareas, and Selects */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"])::placeholder,
+textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Custom scrollbar for clean light mode */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

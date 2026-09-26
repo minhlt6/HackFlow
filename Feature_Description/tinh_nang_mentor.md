@@ -46,7 +46,26 @@ Mentor có thể xem toàn bộ danh sách đội tham gia cuộc thi. Đây là
 
 ---
 
-## 5. Xem thông tin Checkpoint và tiến độ nộp bài
+## 5. Thống kê Lựa chọn Đề tài
+Mentor có thể xem tổng quan về lựa chọn đề tài của các đội thi. Tính năng này giúp mentor nắm bức tranh toàn cảnh để chuẩn bị hỗ trợ phù hợp với đặc thù từng đề tài.
+
+> **Giới hạn:** Mentor chỉ xem được thống kê **các đề tài thuộc chủ đề mình phụ trách**. Không xem được đề tài của chủ đề khác.
+
+### Thông tin hiển thị:
+- **Danh sách đề tài mình phụ trách (dạng bảng):**
+
+  | Chủ đề nhỏ | Số đội đăng ký | Tối đa | Trạng thái |
+  |---|---|---|---|
+
+  - Nhấn vào tên đề tài để xổ ra **danh sách tên đội** đã chọn đề tài đó (tên đội + tên nhóm trưởng để liên hệ khi cần).
+
+- **Đội chưa chọn đề tài (trong phạm vi chủ đề của mentor):** Nếu mentor phụ trách một chủ đề lớn mà còn đội chưa chọn đề tài nhỏ nào, hệ thống sẽ hiển thị cảnh báo.
+
+> **Mục đích:** Giúp mentor chủ động chuẩn bị kiến thức, tài liệu, và sẵn sàng xử lý ticket cho các đội đang làm trong lĩnh vực chuyên môn của mình.
+
+---
+
+## 6. Xem thông tin Checkpoint và tiến độ nộp bài
 Mentor có thể theo dõi tiến độ nộp bài tổng quan của các đội để kịp thời hỗ trợ:
 
 - Danh sách tất cả checkpoint của chương trình (tên, thời gian, yêu cầu).
@@ -55,7 +74,7 @@ Mentor có thể theo dõi tiến độ nộp bài tổng quan của các đội
 
 ---
 
-## 6. Hệ thống Ticket hỗ trợ (Tính năng cốt lõi của Mentor)
+## 7. Hệ thống Ticket hỗ trợ (Tính năng cốt lõi của Mentor)
 Đây là kênh chính thức để đội thi liên lạc và nhờ mentor hỗ trợ trong quá trình làm bài. Toàn bộ lịch sử hỗ trợ được lưu lại có tổ chức trên hệ thống.
 
 ### Giao diện 3 tab:
@@ -87,7 +106,7 @@ Mentor có thể theo dõi tiến độ nộp bài tổng quan của các đội
 
 ---
 
-## 7. Thông tin cá nhân
+## 8. Thông tin cá nhân
 - Xem lại thông tin hồ sơ đã khai báo.
 - Chỉnh sửa bất kỳ trường nào (tương tự màn hình hoàn thiện hồ sơ ban đầu).
 - Đổi mật khẩu đăng nhập.

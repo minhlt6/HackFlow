@@ -33,6 +33,7 @@ CREATE TABLE users (
     password_hash    VARCHAR(255),                          -- NULL với participant (dùng OAuth)
     role             user_role    NOT NULL DEFAULT 'participant',
     full_name        VARCHAR(255) NOT NULL,
+    student_id       VARCHAR(20),                          -- Mã sinh viên (điền khi đăng ký)
     date_of_birth    DATE,
     gender           gender_type,
     province         VARCHAR(100),
@@ -45,6 +46,11 @@ CREATE TABLE users (
     avatar_url       VARCHAR(500),
     is_active        BOOLEAN      NOT NULL DEFAULT TRUE,
     profile_completed BOOLEAN     NOT NULL DEFAULT FALSE,
+    -- Trạng thái phê duyệt tài khoản participant:
+    --   'approved' → hoạt động bình thường (mặc định cho admin/judge/mentor)
+    --   'pending'  → đã đăng ký, chờ BTC phê duyệt
+    --   'rejected' → BTC từ chối
+    approval_status  VARCHAR(20)  NOT NULL DEFAULT 'approved',
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

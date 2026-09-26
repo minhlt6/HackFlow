@@ -1,4 +1,4 @@
-# AGENT.md — Quy tắc & Hướng dẫn làm việc dự án HackFlow
+# AGENTS.md — Quy tắc & Hướng dẫn làm việc dự án HackFlow
 
 > File này là "luật" bắt buộc đọc trước khi bắt đầu code.
 > Mọi AI agent, thành viên nhóm và contributor đều phải tuân thủ.
@@ -64,7 +64,7 @@ HackFlow/
 │   └── init.sql              # Script SQL tạo toàn bộ bảng
 │
 ├── Feature_Description/      # Mô tả tính năng theo role
-├── AGENT.md                  # File này
+├── AGENTS.md                 # File này
 ├── ly_do_va_trien_khai.md
 └── .gitignore
 ```
@@ -223,6 +223,38 @@ git push origin feature/ten-tinh-nang
 git branch -d feature/ten-tinh-nang
 git push origin --delete feature/ten-tinh-nang
 ```
+
+### 3.4 🧠 QUY TẮC BẮT BUỘC — Sử dụng & Cập nhật CodeGraph
+
+> **Dự án HackFlow đã tích hợp cơ sở dữ liệu đồ thị mã nguồn CodeGraph (.codegraph/codegraph.db).**
+> **Mọi Agent và lập trình viên BẮT BUỘC phải thực hiện quy trình 3 bước này khi phát triển hoặc kiểm thử tính năng:**
+
+1. **TRUY CẬP (Trước khi code / sửa đổi):**
+   - **Bắt buộc** truy vấn CodeGraph để khảo sát thay vì đoán mò hoặc đọc file thủ công:
+     - **MCP Tool:** `codegraph_explore` (với `projectPath` là thư mục gốc và `query` là tên symbol/chức năng).
+     - **CLI:** `codegraph explore "<symbol/query>"` hoặc `codegraph context "<tên tính năng>"`.
+   - Phân tích kỹ **Blast Radius** (danh sách caller/callee, các module phụ thuộc) để dự đoán chính xác phạm vi ảnh hưởng trước khi chạm vào code.
+
+2. **CẬP NHẬT CSDL (Sau khi thêm / sửa / xóa code):**
+   - Sau khi hoàn thành bất kỳ thay đổi code nào, **bắt buộc** cập nhật cơ sở dữ liệu CodeGraph:
+     ```bash
+     codegraph sync
+     ```
+   - Nếu có tái cấu trúc lớn (di chuyển nhiều thư mục, tạo module mới quy mô lớn):
+     ```bash
+     codegraph index
+     ```
+
+3. **KIỂM THỬ (Testing):**
+   - Dùng CodeGraph để tìm các bài test bị ảnh hưởng trực tiếp bởi code vừa sửa:
+     ```bash
+     codegraph affected [danh_sách_file_nguồn_đã_sửa]
+     ```
+   - Viết/cập nhật test case tương ứng trong `backend/tests/`.
+   - Chạy lại `codegraph sync` để nạp các node test mới vào đồ thị.
+   - Chạy `pytest` đảm bảo vượt qua 100% kiểm thử trước khi chuyển sang bước tiếp theo.
+
+---
 
 ### 3.5 ⚠️ QUY TẮC BẮT BUỘC — Xác nhận trước khi Push
 
@@ -524,7 +556,11 @@ async with db.begin():
 ## 8. Quy tắc test
 
 ```bash
-# Chạy toàn bộ test
+# 1. Tìm các test bị ảnh hưởng bởi code vừa sửa bằng CodeGraph:
+codegraph affected [danh_sách_file_nguồn_đã_sửa]
+# Ví dụ: codegraph affected backend/app/api/v1/topics.py
+
+# 2. Chạy toàn bộ test backend
 cd backend
 pytest
 
@@ -533,6 +569,10 @@ pytest tests/test_topics.py
 
 # Chạy với coverage report
 pytest --cov=app tests/
+
+# 3. Cập nhật lại CodeGraph sau khi viết test mới
+cd ..
+codegraph sync
 
 # Yêu cầu tối thiểu: viết test cho các hàm sau
 # - calculate_weighted_score()          → test edge case: weight không bằng 1.0
@@ -546,13 +586,16 @@ pytest --cov=app tests/
 ## 9. Checklist trước khi tạo Pull Request
 
 ```
+[ ] Đã dùng codegraph_explore / codegraph explore để kiểm tra quan hệ và blast radius trước khi sửa
 [ ] Code đã được format (black / prettier)
 [ ] Không có file .env bị commit
 [ ] Không có secret/token hardcode trong code
 [ ] API endpoint mới đã có Pydantic schema validate
 [ ] Thêm tính năng mới → đã cập nhật .env.example nếu cần biến mới
 [ ] Logic phức tạp đã có comment giải thích (tiếng Anh hoặc tiếng Việt đều OK)
+[ ] Đã chạy codegraph affected để kiểm tra và bổ sung test cho các module bị ảnh hưởng
 [ ] Đã test thủ công tính năng trên local trước khi push
+[ ] Đã chạy codegraph sync để cập nhật cơ sở dữ liệu CodeGraph
 [ ] Commit message theo đúng format Conventional Commits
 [ ] ⚠️ ĐÃ BÁO CÁO nội dung thay đổi và NHẬN XÁC NHẬN từ minhlt6 trước khi push (xem mục 3.5)
 ```
@@ -562,6 +605,22 @@ pytest --cov=app tests/
 ## 10. Lệnh nhanh (Quick Reference)
 
 ```bash
+# ── CODEGRAPH ────────────────────────────────────
+# Khảo sát quan hệ, symbols và blast radius (CLI)
+codegraph explore "<query hoặc symbol>"
+
+# Khảo sát toàn bộ ngữ cảnh cho 1 task/tính năng
+codegraph context "<tên tính năng>"
+
+# Tìm các file test bị ảnh hưởng sau khi sửa code
+codegraph affected <file_da_sua>
+
+# Đồng bộ cập nhật CSDL sau khi thêm/sửa code hoặc test
+codegraph sync
+
+# Rebuild toàn bộ CSDL (khi có thay đổi cấu trúc lớn)
+codegraph index
+
 # ── BACKEND ──────────────────────────────────────
 # Kích hoạt môi trường ảo (Windows)
 .venv\Scripts\Activate.ps1

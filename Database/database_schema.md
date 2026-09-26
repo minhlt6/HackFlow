@@ -41,6 +41,7 @@ topics ──< subtopics ──< topic_mentors >── users (mentor)
 | `password_hash` | `VARCHAR(255)` | NULLABLE | Mật khẩu đã hash (dùng cho mentor/judge/admin — không dùng cho participant) |
 | `role` | `ENUM('participant','mentor','judge','admin')` | NOT NULL | Vai trò trong hệ thống |
 | `full_name` | `VARCHAR(255)` | NOT NULL | Họ và tên đầy đủ |
+| `student_id` | `VARCHAR(20)` | NULLABLE | Mã sinh viên — thí sinh điền khi đăng ký |
 | `date_of_birth` | `DATE` | NULLABLE | Ngày sinh |
 | `gender` | `ENUM('male','female','other')` | NULLABLE | Giới tính |
 | `province` | `VARCHAR(100)` | NULLABLE | Tỉnh/Thành phố |
@@ -53,10 +54,16 @@ topics ──< subtopics ──< topic_mentors >── users (mentor)
 | `avatar_url` | `VARCHAR(500)` | NULLABLE | Đường dẫn ảnh đại diện |
 | `is_active` | `BOOLEAN` | DEFAULT TRUE | Tài khoản có hoạt động không |
 | `profile_completed` | `BOOLEAN` | DEFAULT FALSE | Đã hoàn thiện hồ sơ chưa |
+| `approval_status` | `VARCHAR(20)` | NOT NULL, DEFAULT 'approved' | Trạng thái phê duyệt: `approved` / `pending` / `rejected` |
 | `created_at` | `TIMESTAMPTZ` | DEFAULT NOW() | Thời điểm tạo tài khoản |
 | `updated_at` | `TIMESTAMPTZ` | DEFAULT NOW() | Thời điểm cập nhật gần nhất |
 
-**Index:** `idx_users_github_id`, `idx_users_email`, `idx_users_role`
+**Giá trị `approval_status`:**
+- `approved` — Tài khoản hoạt động bình thường (mặc định cho admin/judge/mentor tạo bởi hệ thống)
+- `pending` — Thí sinh vừa tự đăng ký, đang chờ BTC phê duyệt; **không thể đăng nhập**
+- `rejected` — BTC từ chối; tài khoản bị khoá vĩnh viễn
+
+**Index:** `idx_users_github_id`, `idx_users_email`, `idx_users_role`, `idx_users_approval_status`, `idx_users_student_id`
 
 ---
 

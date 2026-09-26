@@ -33,20 +33,39 @@ Nhấn vào một đội để xem trang chi tiết của đội đó.
 
 ---
 
-## 4. Trang chi tiết đội thi
+## 4. Thống kê Lựa chọn Đề tài
+Giám khảo có thể xem bảng thống kê tổng quan về lựa chọn đề tài của các đội thi để có cái nhìn toàn cảnh trước khi tiến hành chấm điểm. Màn hình này chỉ ở chế độ **xem** — giám khảo không thể chỉnh sửa bất kỳ dữ liệu nào.
+
+### Thông tin hiển thị:
+- **Biểu đồ phân bố:** Biểu đồ cột / thanh ngang thể hiện số lượng đội đã đăng ký theo từng đề tài nhỏ, nhóm theo chủ đề lớn.
+- **Bảng danh sách đề tài:**
+
+  | Chủ đề lớn | Chủ đề nhỏ | Mentor phụ trách | Số đội đăng ký | Tối đa suất |
+  |---|---|---|---|---|
+
+  - Nhấn vào một hàng để xổ ra **danh sách tên đội** đã chọn đề tài đó.
+  - Nếu BGK đang ở chế độ **Blind Judging**, danh sách đội hiển thị bằng mã ẩn danh thay vì tên thật.
+
+- **Danh sách đội chưa chọn đề tài:** Xem các đội đã được duyệt nhưng chưa xác định đề tài (thông tin hữu ích để BGK đặt câu hỏi khi thuyết trình).
+
+> **Mục đích:** Giúp BGK chuẩn bị kỹ hơn về mặt chuyên môn — biết đề tài nào được nhiều đội chọn, hướng nào đang được ưa chuộng, và tránh bị bất ngờ về phân bố đội trong buổi chấm.
+
+---
+
+## 5. Trang chi tiết đội thi
 Trang thông tin đầy đủ của một đội, hiển thị tất cả dữ liệu giám khảo cần để đánh giá:
 
-### 4.1 Thông tin đội
+### 5.1 Thông tin đội
 - Tên đội, mô tả ngắn về đội.
 - Danh sách thành viên: Họ tên và vai trò kỹ thuật chính (Frontend, Backend, AI,...).
 - Đề tài đã chọn.
 
-### 4.2 Thông tin các Checkpoint đã qua
+### 5.2 Thông tin các Checkpoint đã qua
 - Danh sách tất cả checkpoint của chương trình.
 - Với mỗi checkpoint: Thời gian bắt đầu, thời gian kết thúc, trạng thái nộp của đội (Đã nộp / Không nộp).
 - Nếu đội đã nộp: Hiển thị **link bài nộp** (link GitHub, Google Drive, Slide,...) và thời điểm nộp chính xác (ngày/giờ/phút).
 
-### 4.3 Thông tin Sản phẩm cuối
+### 5.3 Thông tin Sản phẩm cuối
 - Thời gian bắt đầu và deadline nộp sản phẩm.
 - Trạng thái nộp sản phẩm (Đã nộp / Chưa nộp).
 - Nếu đã nộp: Hiển thị **link sản phẩm** (link GitHub, link demo, video,...) và thời điểm nộp chính xác.
@@ -54,7 +73,7 @@ Trang thông tin đầy đủ của một đội, hiển thị tất cả dữ l
 
 ---
 
-## 5. Chấm điểm
+## 6. Chấm điểm
 Đây là tính năng cốt lõi của Giám khảo. Bố cục màn hình chấm được chia đôi:
 
 - **Bên trái:** Toàn bộ thông tin bài nộp (link GitHub, link demo, slide,...) để giám khảo xem trực tiếp mà không cần chuyển tab.
@@ -74,7 +93,7 @@ Trang thông tin đầy đủ của một đội, hiển thị tất cả dữ l
 
 ---
 
-## 6. Tổng quan kết quả (sau khi BTC công bố)
+## 7. Tổng quan kết quả (sau khi BTC công bố)
 Sau khi BTC khóa bảng điểm và công bố kết quả:
 - Giám khảo có thể xem bảng xếp hạng tổng.
 - Xem điểm của tất cả giám khảo khác cho từng đội (không còn ẩn danh nữa).

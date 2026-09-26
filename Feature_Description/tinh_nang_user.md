@@ -5,10 +5,34 @@ Thí sinh là người tham gia cuộc thi. Sau khi đăng nhập và hoàn thi�
 
 ---
 
-## 1. Đăng nhập bằng GitHub OAuth
-- Trang đăng nhập hiển thị **một nút duy nhất**: **[Đăng nhập bằng GitHub]**.
-- Nhấn vào nút này, hệ thống chuyển hướng đến trang xác thực của GitHub. Thí sinh đăng nhập bằng tài khoản GitHub cá nhân của mình.
-- Sau khi GitHub xác nhận thành công, hệ thống tự động tạo tài khoản HackFlow và chuyển thí sinh đến màn hình **Hoàn thiện hồ sơ**.
+## 1. Đăng ký tài khoản & Đăng nhập
+
+### 1.1 Đăng ký tài khoản mới
+- Trang đăng nhập có **2 tab**: **Đăng nhập** và **Đăng ký thí sinh**.
+- Thí sinh chọn tab **"Đăng ký thí sinh"** và điền:
+  - **Họ và tên** *(bắt buộc)*
+  - **Mã sinh viên** *(không bắt buộc)*
+  - **Email** *(bắt buộc)*
+  - **Mật khẩu** *(tối thiểu 6 ký tự)*
+- Nhấn **[Đăng ký & Chờ duyệt]**.
+- Sau khi gửi form thành công, hệ thống hiển thị **màn hình thông báo chờ duyệt** với:
+  - Trạng thái: "Tài khoản đang chờ Ban Tổ Chức phê duyệt"
+  - Hướng dẫn gửi email xác nhận tới BTC (kèm **nút mailto tự điền template**)
+  - Template email gồm: họ tên, mã sinh viên, email đã đăng ký
+- Thí sinh **chưa thể đăng nhập** cho đến khi BTC phê duyệt.
+
+> ⚠️ **Lưu ý:** Tài khoản admin, judge, mentor **không** đăng ký qua form này — được tạo trực tiếp bởi hệ thống.
+
+### 1.2 Đăng nhập sau khi được duyệt
+- Thí sinh nhập email + mật khẩu và nhấn **[Đăng nhập ngay]**.
+- Nếu tài khoản đang `pending` → hệ thống hiển thị màn hình chờ duyệt (không phải lỗi thông thường).
+- Nếu tài khoản bị `rejected` → hiển thị thông báo tài khoản bị từ chối kèm hướng dẫn liên hệ BTC.
+- Nếu được duyệt → đăng nhập thành công, chuyển đến trang chủ.
+
+### 1.3 Đăng nhập bằng GitHub OAuth
+- Nhấn nút **[GitHub OAuth 2.0]** trên trang đăng nhập.
+- Hệ thống chuyển hướng đến trang xác thực GitHub. Sau khi GitHub xác nhận, tài khoản được tạo tự động.
+- Tài khoản qua GitHub cũng được đặt `approval_status = pending` và yêu cầu BTC phê duyệt trước khi dùng được.
 
 ---
 
