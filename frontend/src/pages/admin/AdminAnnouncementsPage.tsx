@@ -148,7 +148,9 @@ export const AdminAnnouncementsPage: React.FC = () => {
             <label className="text-slate-300 font-medium text-xs">Đối tượng nhận thông báo *</label>
             <select
               value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value as any)}
+              onChange={(e) =>
+                setTargetRole(e.target.value as 'all' | 'candidates' | 'judges' | 'mentors')
+              }
               className="p-2.5 rounded-[10px] bg-[#0F172A] border border-[#334155] text-slate-100 text-xs focus:border-[#6366F1] focus:outline-none"
             >
               <option value="all">Toàn bộ cuộc thi (Tất cả vai trò)</option>

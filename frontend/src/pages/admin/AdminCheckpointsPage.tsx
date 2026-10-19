@@ -70,7 +70,7 @@ const PRESET_TEMPLATES: {
   defaultLabel: string;
   placeholder: string;
   description: string;
-  icon: any;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
 }[] = [
   {
     type: 'repoUrl',
@@ -191,7 +191,7 @@ const SubmissionFieldsEditor: React.FC<SubmissionFieldsEditorProps> = ({
 }) => {
   const handleAddField = (preset: typeof PRESET_TEMPLATES[0]) => {
     const newField: SubmissionFieldConfig = {
-      id: `f-${preset.type}-${Date.now()}`,
+      id: `f-${preset.type}-${fields.length + 1}`,
       type: preset.type,
       label: preset.defaultLabel,
       placeholder: preset.placeholder,

@@ -17,7 +17,10 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
 /**
  * Broadcasts a lightweight sync notification to all other tabs/windows.
  */
-export const broadcastSyncEvent = (type: string = 'STATE_CHANGED', meta?: any) => {
+export const broadcastSyncEvent = (
+  type: string = 'STATE_CHANGED',
+  meta?: Record<string, unknown>,
+) => {
   if (isApplyingRemoteUpdate) return;
   try {
     const payload = { type, meta, timestamp: Date.now() };
@@ -116,7 +119,7 @@ export const initRealtimeSync = () => {
   });
 
   // 4. Hook into useMockStore mutations to automatically broadcast to other tabs
-  let broadcastTimer: any = null;
+  let broadcastTimer: ReturnType<typeof setTimeout> | null = null;
   useMockStore.subscribe((state, prevState) => {
     if (isApplyingRemoteUpdate) return;
 
@@ -146,7 +149,9 @@ export const initRealtimeSync = () => {
       whitelistChanged ||
       pendingChanged
     ) {
-      clearTimeout(broadcastTimer);
+      if (broadcastTimer !== null) {
+        clearTimeout(broadcastTimer);
+      }
       broadcastTimer = setTimeout(() => {
         broadcastSyncEvent('MUTATION', {
           ticketsChanged,

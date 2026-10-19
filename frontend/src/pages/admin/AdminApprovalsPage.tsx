@@ -68,7 +68,10 @@ export const AdminApprovalsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    void fetchBackendPending();
+    const timer = setTimeout(() => {
+      void fetchBackendPending();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [fetchBackendPending]);
 
   // Merge real backend pending candidates with mock pending candidates (deduplicating by email)
