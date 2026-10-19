@@ -1,122 +1,76 @@
 import pytest
-import pytest_asyncio
-import asyncio
-from typing import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.main import app as fastapi_app
 from app.core.database import Base, get_db
-from app.core.security import create_access_token, get_password_hash
-from app.models.user import User
-from app.models.config import HackathonConfig
-from main import app
+import app.models  # Ensure all models are loaded onto Base.metadata
 
-TEST_DATABASE_URL = "sqlite+aiosqlite:///file:memdb1?mode=memory&cache=shared&uri=true"
+from sqlalchemy.pool import StaticPool
 
+# In-memory async SQLite engine with shared cache for lightning-fast, isolated tests
 test_engine = create_async_engine(
-    TEST_DATABASE_URL,
+    "sqlite+aiosqlite:///file:testmem?mode=memory&cache=shared&uri=true",
+    echo=False,
+    poolclass=StaticPool,
     connect_args={"check_same_thread": False},
-    future=True,
 )
 
-TestingSessionLocal = async_sessionmaker(
+TestSessionLocal = async_sessionmaker(
     bind=test_engine,
     class_=AsyncSession,
-    expire_on_commit=False,
     autocommit=False,
     autoflush=False,
+    expire_on_commit=False,
 )
 
 
-@pytest_asyncio.fixture(scope="function")
-async def test_db() -> AsyncGenerator[AsyncSession, None]:
+@pytest.fixture(autouse=True)
+async def setup_test_database():
+    """
+    Create all tables in memory before each test and drop them after.
+    """
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    async with TestingSessionLocal() as session:
-        # Create singleton HackathonConfig
-        from datetime import datetime, timezone, timedelta
-
-        now = datetime.now(timezone.utc)
-        config = HackathonConfig(
-            id=1,
-            name="HackFlow Test Contest",
-            registration_start=now - timedelta(days=1),
-            registration_end=now + timedelta(days=7),
-            contest_start=now + timedelta(days=8),
-            contest_end=now + timedelta(days=15),
-        )
-        session.add(config)
-        await session.commit()
-        yield session
-
+    yield
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await test_engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="function")
-async def client(test_db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
+async def db_session():
+    """
+    Async database session fixture for test setup and assertions.
+    """
+    async with TestSessionLocal() as session:
+        yield session
+
+
+@pytest.fixture
+async def client():
+    """
+    Async HTTP client for testing FastAPI application with in-memory DB override.
+    """
     async def override_get_db():
-        async with TestingSessionLocal() as session:
-            yield session
+        async with TestSessionLocal() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
 
-    app.dependency_overrides[get_db] = override_get_db
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=fastapi_app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
+    fastapi_app.dependency_overrides.clear()
 
-    app.dependency_overrides.clear()
-
-
-@pytest_asyncio.fixture
-async def admin_user(test_db: AsyncSession) -> User:
-    user = User(
-        email="admin@example.com",
-        password_hash=get_password_hash("Admin@123"),
-        full_name="Admin User",
-        role="admin",
-        profile_completed=True,
-    )
-    test_db.add(user)
-    await test_db.commit()
-    await test_db.refresh(user)
-    return user
-
-
-@pytest_asyncio.fixture
-def admin_token(admin_user: User) -> str:
-    return create_access_token(
-        {
-            "sub": admin_user.id,
-            "email": admin_user.email,
-            "role": admin_user.role,
-            "name": admin_user.full_name,
-        }
-    )
-
-
-@pytest_asyncio.fixture
-async def participant_user(test_db: AsyncSession) -> User:
-    user = User(
-        email="participant@example.com",
-        password_hash=get_password_hash("User@123"),
-        full_name="Test Participant",
-        role="participant",
-        profile_completed=True,
-    )
-    test_db.add(user)
-    await test_db.commit()
-    await test_db.refresh(user)
-    return user
-
-
-@pytest_asyncio.fixture
-def participant_token(participant_user: User) -> str:
-    return create_access_token(
-        {
-            "sub": participant_user.id,
-            "email": participant_user.email,
-            "role": participant_user.role,
-            "name": participant_user.full_name,
-        }
-    )

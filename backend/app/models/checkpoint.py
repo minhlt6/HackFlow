@@ -1,73 +1,117 @@
-import uuid
 from datetime import datetime, timezone
-from typing import Optional, List
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey, Text, Index, JSON
+from enum import Enum
+from typing import TYPE_CHECKING, Any, List, Optional
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.core.database import Base
-from app.models.base import GUID, JSONList
+
+from app.models.base import BaseModel
+
+if TYPE_CHECKING:
+    from app.models.team import Team
+    from app.models.evaluation import Evaluation
 
 
-class Checkpoint(Base):
+class SubmissionStatus(str, Enum):
+    SUBMITTED = "submitted"
+    PENDING_SHA_FREEZE = "pending_sha_freeze"
+    SHA_VERIFICATION_FAILED = "sha_verification_failed"
+    EVALUATED = "evaluated"
+    LATE = "late"
+    INVALID = "invalid"
+
+
+class Checkpoint(BaseModel):
+    """
+    Hackathon time-gated checkpoint / milestone.
+    """
     __tablename__ = "checkpoints"
 
-    id: Mapped[str] = mapped_column(GUID, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    open_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    close_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    is_required: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    requirements: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_final_checkpoint: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    grace_period_seconds: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    submission_fields: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
 
-    # Hệ thống điểm mốc & quy chế nộp muộn
-    points: Mapped[float] = mapped_column(Float, default=10.0, nullable=False)
-    late_penalty: Mapped[float] = mapped_column(Float, default=2.0, nullable=False)
-
-    # Cơ chế block tự động khi không nộp nhiều checkpoint liên tiếp
-    block_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    block_threshold: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
-
-    # Danh sách các trường dữ liệu bắt buộc nộp (VD: ["repo_url", "slide_url", "idea_summary"])
-    required_fields: Mapped[list] = mapped_column(JSONList, default=lambda: ["repo_url"], nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
-    )
-
-    submissions = relationship(
-        "CheckpointSubmission", back_populates="checkpoint", cascade="all, delete-orphan"
+    # Relationships
+    submissions: Mapped[List["Submission"]] = relationship(
+        back_populates="checkpoint", cascade="all, delete-orphan"
     )
 
 
-class CheckpointSubmission(Base):
-    __tablename__ = "checkpoint_submissions"
-    __table_args__ = (Index("idx_cp_sub_team_checkpoint", "team_id", "checkpoint_id"),)
+class Submission(BaseModel):
+    """
+    Team submission per checkpoint, capturing frozen GitHub Commit SHA.
+    """
+    __tablename__ = "submissions"
+    __table_args__ = (
+        UniqueConstraint("team_id", "checkpoint_id", name="uq_submission_team_checkpoint"),
+    )
 
-    id: Mapped[str] = mapped_column(GUID, primary_key=True, default=lambda: str(uuid.uuid4()))
     checkpoint_id: Mapped[str] = mapped_column(
-        GUID, ForeignKey("checkpoints.id", ondelete="CASCADE"), index=True, nullable=False
+        String(36), ForeignKey("checkpoints.id", ondelete="CASCADE"), nullable=False, index=True
     )
     team_id: Mapped[str] = mapped_column(
-        GUID, ForeignKey("teams.id", ondelete="CASCADE"), index=True, nullable=False
+        String(36), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    submitted_by: Mapped[str] = mapped_column(
-        GUID, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    submitted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    submission_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    repo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    demo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    commit_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    submission_data: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-    # Dữ liệu nộp động theo required_fields (VD: slide_url, video_url, project_title, idea_summary...)
-    custom_fields: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-
-    # Điểm ghi nhận cho bài nộp và trạng thái nộp trễ
-    score_awarded: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    is_late: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    submitted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    status: Mapped[str] = mapped_column(
+        String(32), default=SubmissionStatus.SUBMITTED.value, nullable=False, index=True
     )
-    is_latest: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    grace_period_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    version_history: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    checkpoint = relationship("Checkpoint", back_populates="submissions")
-    team = relationship("Team", back_populates="checkpoint_submissions")
-    user = relationship("User")
+    # Relationships
+    checkpoint: Mapped["Checkpoint"] = relationship(back_populates="submissions")
+    team: Mapped["Team"] = relationship(back_populates="submissions")
+    evaluations: Mapped[List["Evaluation"]] = relationship(
+        back_populates="submission", cascade="all, delete-orphan"
+    )
+
+
+class AuditLog(BaseModel):
+    """
+    Audit trail for checkpoint submissions, resubmissions, SHA fallbacks, rollbacks,
+    and administrative checkpoint modifications (HF-34 & SRS HF-23).
+    """
+    __tablename__ = "audit_logs"
+
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    team_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    checkpoint_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("checkpoints.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    submission_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    late_grace_period: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, index=True
+    )
+    commit_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    details: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+
