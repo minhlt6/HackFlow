@@ -1,0 +1,6546 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "HackFlow Backend API — API Documentation",
+    "description": "# 🚀 HackFlow Backend API — Nền tảng tổ chức & Chấm thi Hackathon\n\nChào mừng bạn đến với tài liệu kỹ thuật API chính thức của dự án **HackFlow9**. Tài liệu này được thiết kế và bàn giao bởi **Lê Tiến Minh (Tech Lead / Core Backend Architect)** phục vụ cho việc tích hợp của Frontend (Trần Thùy Linh), QA/Postman (Đỗ Thị Lan Anh) và nghiệm thu chức năng từ BA (Dương Thị Khánh Ly).\n\n---\n\n## 🏛️ Kiến trúc hệ thống (3-Tier Architecture)\nHệ thống tuân thủ nghiêm ngặt mô hình 3 tầng phân tách độc lập:\n1. **Router (API Layer)**: Tiếp nhận HTTP request, xác thực schema Pydantic, bảo mật JWT Bearer / RBAC, trả về Envelope chuẩn hóa.\n2. **Service (Business Layer)**: Thực thi toàn bộ quy tắc nghiệp vụ Hackathon (ràng buộc 3-5 thành viên/đội, kiểm tra hạn chót, kiểm tra trạng thái phê duyệt).\n3. **Repository (Data Layer)**: Truy xuất cơ sở dữ liệu qua Async SQLAlchemy 2.0 (PostgreSQL / Supabase), hỗ trợ khóa chống tranh chấp `SELECT FOR UPDATE`.\n\n---\n\n## 📦 Chuẩn hóa phản hồi (API Envelope Pattern)\nToàn bộ phản hồi HTTP (cả 2xx thành công lẫn 4xx/5xx lỗi) đều được đóng gói theo định dạng `ApiResponse[T]` thống nhất:\n\n### Thành công (HTTP 200 / 201):\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"message\": \"Thông báo kết quả thao tác thành công\"\n}\n```\n\n### Thất bại (HTTP 400 / 401 / 403 / 404 / 409 / 422 / 500):\n```json\n{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Mô tả chi tiết nguyên nhân lỗi\",\n  \"error_code\": \"TEN_MA_LOI_CHUAN_HOA\"\n}\n```\n\n---\n\n## 🔐 Xác thực & Phân quyền (Authentication & Authorization)\n- **Cơ chế xác thực**: JSON Web Token (JWT) theo chuẩn RFC 7519.\n- **Header gửi kèm**: `Authorization: Bearer <access_token>`\n- **Phương thức đăng nhập**:\n  - Email + Password nội bộ (cho Admin, Judge, Mentor)\n  - GitHub OAuth 2.0 (dành cho Thí sinh - Candidate)\n- **Trạng thái phê duyệt (Approval Status)**:\n  - `pending`: Thí sinh mới đăng ký, chờ BTC phê duyệt.\n  - `approved`: Đã được duyệt hoặc có trong Whitelist, toàn quyền tạo đội & chọn đề tài.\n  - `rejected`: Đơn đăng ký bị từ chối.\n- **Vai trò người dùng (Roles)**:\n  - `admin`: Ban Tổ Chức (toàn quyền quản lý Whitelist, duyệt thí sinh, cấu hình đề tài).\n  - `judge`: Giám khảo chấm thi.\n  - `mentor`: Cố vấn hướng dẫn.\n  - `candidate`: Thí sinh thi đấu (Leader / Member).\n\n---\n\n## ⚠️ Bảng mã lỗi chuẩn hóa (Standard Error Codes)\n| Mã lỗi (`error_code`) | HTTP Status | Ý nghĩa & Hướng xử lý cho Frontend |\n|---|---|---|\n| `UNAUTHORIZED` | 401 | Thiếu token hoặc token đã hết hạn/không hợp lệ. Điều hướng về `/login`. |\n| `FORBIDDEN_ROLE` | 403 | Người dùng không đủ quyền RBAC truy cập chức năng này. |\n| `ACCOUNT_NOT_APPROVED` | 403 | Tài khoản chưa được BTC phê duyệt (`approval_status != 'approved'`). |\n| `ALREADY_IN_TEAM` | 400 | Thí sinh đã tham gia một đội thi khác, không thể tạo hoặc tham gia thêm. |\n| `TEAM_FULL` | 400 | Đội thi đã đạt số lượng tối đa 5 thành viên. |\n| `TEAM_NAME_TAKEN` | 400 | Tên đội thi đã được đăng ký trước đó. |\n| `NOT_IN_TEAM` | 400 | Thao tác yêu cầu người dùng phải thuộc một đội thi. |\n| `ONLY_LEADER_CAN_PERFORM`| 403 | Thao tác (như chọn hoặc hủy đề tài) chỉ dành riêng cho Đội trưởng. |\n| `TEAM_NOT_QUALIFIED` | 400 | Đội thi chưa đủ điều kiện (chưa đạt tối thiểu 3 thành viên để đăng ký đề tài). |\n| `TOPIC_FULL` | 409 | Đề tài đã đạt giới hạn quota số đội đăng ký tối đa. |\n| `TOPIC_SELECTION_CLOSED` | 400 | Thời gian đăng ký đề tài đã kết thúc hoặc đề tài tạm khóa. |\n| `TOPIC_ALREADY_SELECTED` | 400 | Đội thi đã chọn một đề tài trước đó (cần hủy đề tài cũ trước). |\n| `CHECKPOINT_NOT_OPEN` | 403 | Cổng nộp bài cho checkpoint này chưa đến giờ mở (`now < start_time`). |\n| `CHECKPOINT_INACTIVE` | 403 | Checkpoint này đang tạm khóa hoặc đã bị vô hiệu hóa bởi Ban tổ chức (`is_active=False`). |\n| `DEADLINE_EXCEEDED` | 403/400 | Đã quá hạn chót cho phép thao tác (chọn đề tài hoặc nộp bài sau Deadline + Grace Period 5s). |\n| `GITHUB_REPO_INACCESSIBLE`| 400 | Repo GitHub nộp bài không công khai hoặc không truy cập được. |\n| `NOT_FOUND` | 404 | Không tìm thấy bản ghi/tài nguyên yêu cầu. |\n| `VALIDATION_ERROR` | 422 | Dữ liệu gửi lên sai kiểu dữ liệu hoặc vi phạm validation rules. |\n\n---\n\n## 🗺️ Lộ trình triển khai API (Implementation Status)\n- ✅ **Sprint 1 (Hoàn tất)**:\n  - `HF-17`: Khởi tạo kiến trúc 3 tầng & chuẩn hóa ApiResponse Envelope.\n  - `HF-19`: Xác thực JWT, GitHub OAuth 2.0 Callback, RBAC, Admin Whitelist & Candidate Approval.\n  - `HF-20`: Quản lý Đội thi (Create, Join by 6-char code, Me, Team Detail, giới hạn 3-5 thành viên).\n  - `HF-21`: Quản lý Đề tài thi (List Topics, Quota, Atomic Select `SELECT FOR UPDATE`, Cancel Topic).\n  - `HF-22`: Xuất Swagger Docs & Tài liệu Bàn giao API Contract.\n- 🚀 **Sprint 2 (Đang triển khai)**:\n  - `HF-32`: Lập trình API Checkpoint Time-gated (Mở/Khóa cổng nộp bài, ân hạn mạng 5s) — **Hoàn tất**.\n  - `HF-33`: Lập trình module tích hợp GitHub API xác thực HEAD Commit SHA.\n  - `HF-34`: Lập trình API POST /submissions (Lưu trữ bài nộp) và Audit Log.\n- ⏳ **Sprint 3 (Roadmap sắp tới)**:\n  - Evaluation & Scoring Matrix API (Chấm điểm Rubric cho Giám khảo, xếp hạng tự động).\n",
+    "contact": {
+      "name": "Lê Tiến Minh (Tech Lead / Core Backend Architect)",
+      "url": "https://github.com/minhlt6/HackFlow9",
+      "email": "minhlt@hackflow.dev"
+    },
+    "license": {
+      "name": "MIT License",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://api.hackflow.dev",
+      "description": "Staging / Production Server (Mock)"
+    }
+  ],
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check hệ thống",
+        "description": "Kiểm tra trạng thái hoạt động của server FastAPI, môi trường và kết nối cơ sở dữ liệu.",
+        "operationId": "get_health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_HealthCheckData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/examples/success": {
+      "get": {
+        "tags": [
+          "Examples & Envelope Demo"
+        ],
+        "summary": "Demo Success",
+        "description": "Demo endpoint returning a successful API envelope.",
+        "operationId": "demo_success_api_v1_examples_success_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/examples/error-not-found": {
+      "get": {
+        "tags": [
+          "Examples & Envelope Demo"
+        ],
+        "summary": "Demo Not Found",
+        "description": "Demo endpoint triggering a 404 NotFoundException wrapped in API envelope.",
+        "operationId": "demo_not_found_api_v1_examples_error_not_found_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/examples/error-bad-request": {
+      "get": {
+        "tags": [
+          "Examples & Envelope Demo"
+        ],
+        "summary": "Demo Bad Request",
+        "description": "Demo endpoint triggering a 400 BadRequestException wrapped in API envelope.",
+        "operationId": "demo_bad_request_api_v1_examples_error_bad_request_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/examples/validation": {
+      "post": {
+        "tags": [
+          "Examples & Envelope Demo"
+        ],
+        "summary": "Demo Validation",
+        "description": "Demo endpoint triggering automatic 422 RequestValidationError envelope if fields are invalid.",
+        "operationId": "demo_validation_api_v1_examples_validation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_DemoPayload_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Đăng nhập tài khoản nội bộ (Admin/Judge/Mentor)",
+        "description": "Xác thực bằng Email và Mật khẩu, trả về Bearer JWT Token và thông tin User.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TokenResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Đăng ký tài khoản nội bộ mới",
+        "description": "Đăng ký tài khoản mới. Thí sinh mặc định có approval_status='pending'.",
+        "operationId": "register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TokenResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/github": {
+      "get": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Lấy URL chuyển hướng GitHub OAuth 2.0",
+        "description": "Tạo URL chuyển hướng người dùng đến trang ủy quyền GitHub OAuth 2.0.",
+        "operationId": "get_github_oauth_url_api_v1_auth_github_get",
+        "parameters": [
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Redirect Uri"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_GitHubOAuthUrlResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/github/callback": {
+      "post": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Xử lý Callback từ GitHub OAuth",
+        "description": "Đổi authorization code lấy GitHub profile, tự động tạo tài khoản thí sinh\n(approval_status='pending') nếu lần đầu đăng nhập, và cấp JWT Bearer Token.",
+        "operationId": "github_oauth_callback_api_v1_auth_github_callback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitHubOAuthCallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TokenResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Lấy thông tin tài khoản hiện tại",
+        "description": "Lấy thông tin hồ sơ của người dùng đang đăng nhập dựa trên JWT Bearer Token.",
+        "operationId": "get_profile_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_UserResponse_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/test-admin": {
+      "get": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Endpoint kiểm tra phân quyền RBAC (Chỉ Admin)",
+        "description": "Endpoint bảo vệ chỉ cho phép vai trò 'admin'. Các vai trò khác trả 403 Forbidden.",
+        "operationId": "test_admin_access_api_v1_auth_test_admin_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/test-approved": {
+      "get": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Endpoint kiểm tra trạng thái phê duyệt (Chỉ Approved)",
+        "description": "Endpoint kiểm tra tài khoản đã được BTC phê duyệt (approval_status == 'approved').\nTài khoản pending/rejected sẽ bị chặn 403 Forbidden.",
+        "operationId": "test_approved_access_api_v1_auth_test_approved_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/profile": {
+      "post": {
+        "tags": [
+          "Auth (HF-19)"
+        ],
+        "summary": "Cập nhật hồ sơ cá nhân thí sinh (Onboarding)",
+        "description": "Lưu thông tin hồ sơ cá nhân của thí sinh tại màn hình Onboarding.",
+        "operationId": "update_user_profile_api_v1_users_profile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ProfileUpdateResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/whitelist": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Admin"
+        ],
+        "summary": "Xem toàn bộ Whitelist",
+        "description": "BTC xem danh sách email được phép đăng nhập.",
+        "operationId": "list_whitelist_api_v1_admin_whitelist_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Inactive"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_WhitelistEntryResponse__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Admin"
+        ],
+        "summary": "Thêm 1 email vào Whitelist",
+        "description": "BTC thêm 1 email đơn lẻ vào Whitelist.",
+        "operationId": "add_to_whitelist_api_v1_admin_whitelist_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhitelistAddRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_WhitelistEntryResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/whitelist/bulk": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Admin"
+        ],
+        "summary": "Import nhiều email vào Whitelist",
+        "description": "BTC import danh sách email từ kết quả chọn lọc thí sinh.",
+        "operationId": "bulk_add_whitelist_api_v1_admin_whitelist_bulk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhitelistBulkAddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_WhitelistBulkAddResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/whitelist/{entry_id}": {
+      "delete": {
+        "tags": [
+          "Admin",
+          "Admin"
+        ],
+        "summary": "Vô hiệu hóa 1 email khỏi Whitelist",
+        "description": "BTC vô hiệu hóa (soft-delete) 1 email khỏi Whitelist.",
+        "operationId": "deactivate_whitelist_entry_api_v1_admin_whitelist__entry_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_WhitelistDeactivateResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/whitelist/{entry_id}/reactivate": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "Admin"
+        ],
+        "summary": "Kích hoạt lại 1 email",
+        "description": "BTC kích hoạt lại email đã tắt trong Whitelist.",
+        "operationId": "reactivate_whitelist_entry_api_v1_admin_whitelist__entry_id__reactivate_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_WhitelistDeactivateResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/candidates/pending": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Admin"
+        ],
+        "summary": "Danh sách thí sinh chờ duyệt",
+        "description": "BTC xem toàn bộ tài khoản thí sinh đang ở trạng thái PENDING.",
+        "operationId": "list_pending_candidates_api_v1_admin_candidates_pending_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_CandidatePendingResponse__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/candidates/{user_id}/approval": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Admin"
+        ],
+        "summary": "BTC duyệt hoặc từ chối thí sinh",
+        "description": "BTC duyệt (approve) hoặc từ chối (reject) tài khoản thí sinh PENDING.\n\nKhi approve:\n- approval_status → APPROVED\n- Email tự động được thêm vào Whitelist (lần đăng nhập tiếp theo sẽ APPROVED ngay)\n\nKhi reject:\n- approval_status → REJECTED\n- Email KHÔNG được thêm vào Whitelist",
+        "operationId": "approve_or_reject_candidate_api_v1_admin_candidates__user_id__approval_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_UserResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams": {
+      "post": {
+        "tags": [
+          "Teams (HF-20)"
+        ],
+        "summary": "Tạo đội thi mới",
+        "description": "Tạo đội thi mới với người tạo là Leader.\nChỉ tài khoản APPROVED mới được tạo đội.",
+        "operationId": "create_team_api_v1_teams_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TeamResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/teams/join": {
+      "post": {
+        "tags": [
+          "Teams (HF-20)"
+        ],
+        "summary": "Tham gia đội thi bằng mã mời",
+        "description": "Gia nhập đội thi hiện có bằng mã mời 6 ký tự.\nChỉ tài khoản APPROVED mới được tham gia.",
+        "operationId": "join_team_api_v1_teams_join_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamJoinRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TeamResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/teams/me": {
+      "get": {
+        "tags": [
+          "Teams (HF-20)"
+        ],
+        "summary": "Lấy thông tin đội thi hiện tại của người dùng",
+        "description": "Xem thông tin đội thi của tài khoản đang đăng nhập kèm danh sách thành viên.",
+        "operationId": "get_my_team_api_v1_teams_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Union_TeamResponse__NoneType__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/teams/{team_id}": {
+      "get": {
+        "tags": [
+          "Teams (HF-20)"
+        ],
+        "summary": "Lấy chi tiết đội thi theo ID",
+        "description": "Xem chi tiết thông tin một đội thi theo ID.",
+        "operationId": "get_team_by_id_api_v1_teams__team_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TeamResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/topics": {
+      "get": {
+        "tags": [
+          "Topics (HF-21)"
+        ],
+        "summary": "Xem danh sách đề tài và chỉ tiêu đăng ký (Quota)",
+        "description": "Hiển thị toàn bộ danh sách đề tài đang mở kèm thông tin quota và subtopics.",
+        "operationId": "list_topics_api_v1_topics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_TopicResponse__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/topics/select": {
+      "post": {
+        "tags": [
+          "Topics (HF-21)"
+        ],
+        "summary": "Đăng ký chọn đề tài cho đội thi",
+        "description": "Đăng ký đề tài bằng giao dịch nguyên tử (SELECT FOR UPDATE) để chống tranh chấp đồng thời (race condition).\nYêu cầu:\n- Tài khoản APPROVED\n- Đội thi hợp lệ (tối thiểu 3 thành viên)\n- Đề tài còn quota",
+        "operationId": "select_topic_api_v1_topics_select_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TopicSelectResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/topics/cancel": {
+      "post": {
+        "tags": [
+          "Topics (HF-21)"
+        ],
+        "summary": "Hủy chọn đề tài cho đội thi",
+        "description": "Hủy đề tài đã đăng ký (chỉ Đội trưởng được thao tác trong thời hạn cho phép).",
+        "operationId": "cancel_topic_api_v1_topics_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicCancelRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/checkpoints": {
+      "get": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Lấy danh sách các mốc Checkpoint của cuộc thi",
+        "description": "Hiển thị danh sách các mốc nộp bài (Milestones/Checkpoints) kèm thông tin\ntrạng thái time-gated (upcoming, open, grace_period, closed), số giây còn lại\nvà bài nộp mới nhất của đội thi (nếu đã đăng nhập).",
+        "operationId": "list_checkpoints_api_v1_checkpoints_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "only_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Only Active"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_CheckpointResponse__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Tạo mới mốc Checkpoint (Chỉ Admin)",
+        "description": "Ban Tổ Chức (BTC) cấu hình mốc Checkpoint mới kèm thời gian bắt đầu và hạn chót.",
+        "operationId": "create_checkpoint_api_v1_checkpoints_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CheckpointResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/checkpoints/verify-github-repo": {
+      "post": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Xác thực kho mã nguồn GitHub và trích xuất HEAD Commit SHA (HF-33)",
+        "description": "Module xác thực repository GitHub công khai và trích xuất HEAD Commit SHA mới nhất (HF-33):\n- Parse owner/repo từ URL hợp lệ (hỗ trợ .git, tree/branch, format shorthand).\n- Gọi GitHub REST API xác thực trạng thái public và commit mới nhất.\n- Cơ chế Retry 3 lần đối với sự cố kết nối / timeout.\n- Graceful Fallback (bảo lưu trạng thái đối soát thủ công) nếu hạ tầng GitHub gặp sự cố.\n- Từ chối HTTP 422 (GITHUB_REPO_INACCESSIBLE) nếu repo là Private hoặc không tồn tại.",
+        "operationId": "verify_github_repo_api_v1_checkpoints_verify_github_repo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyGitHubRepoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_VerifyGitHubRepoResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/checkpoints/{checkpoint_id}": {
+      "get": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Xem chi tiết một Checkpoint",
+        "description": "Lấy thông tin chi tiết một mốc Checkpoint theo UUID.",
+        "operationId": "get_checkpoint_api_v1_checkpoints__checkpoint_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CheckpointResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Cập nhật mốc Checkpoint (Chỉ Admin)",
+        "description": "Ban Tổ Chức (BTC) gia hạn thời gian nộp bài hoặc sửa đổi thông tin Checkpoint.",
+        "operationId": "update_checkpoint_api_v1_checkpoints__checkpoint_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CheckpointResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/checkpoints/{checkpoint_id}/status": {
+      "get": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Kiểm tra trạng thái Time-gated của Checkpoint (Mở/Khóa cổng)",
+        "description": "Truy vấn trạng thái time-gated thời gian thực:\n- Server Time (UTC)\n- Trạng thái: 'upcoming' | 'open' | 'grace_period' | 'closed'\n- Cờ can_submit, grace_period_applied (5s network latency), thời gian đếm ngược.",
+        "operationId": "get_checkpoint_time_gated_status_api_v1_checkpoints__checkpoint_id__status_get",
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CheckpointTimeGatedStatusResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/checkpoints/{checkpoint_id}/validate-window": {
+      "post": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Kiểm tra điều kiện hợp lệ để nộp bài (Time-gated Validation)",
+        "description": "API xác thực cửa sổ thời gian nộp bài nghiêm ngặt theo Acceptance Criteria HF-32:\n- Trả về HTTP 200 OK nếu nằm trong khung giờ hợp lệ [start_time, deadline] hoặc Grace Period [deadline, deadline + 5s].\n- Ném HTTP 403 Forbidden nếu:\n  + Chưa đến giờ mở cổng: error_code=\"CHECKPOINT_NOT_OPEN\"\n  + Quá hạn nộp bài: error_code=\"DEADLINE_EXCEEDED\"\n  + BTC đã khóa checkpoint: error_code=\"CHECKPOINT_INACTIVE\"",
+        "operationId": "validate_submission_window_api_v1_checkpoints__checkpoint_id__validate_window_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointValidateWindowRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ValidateSubmissionWindowResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/checkpoints/{checkpoint_id}/submissions": {
+      "post": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Nộp bài cho một Checkpoint cụ thể (Tương thích Frontend HF-30 & SRS HF-23)",
+        "description": "Endpoint nộp bài theo đường dẫn `/checkpoints/{checkpoint_id}/submissions` (HF-30 & HF-34).",
+        "operationId": "submit_checkpoint_by_path_api_v1_checkpoints__checkpoint_id__submissions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmissionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SubmissionResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Lấy lịch sử bài nộp của một Checkpoint cụ thể (HF-31 & HF-34)",
+        "description": "Lấy danh sách bài nộp và lịch sử phiên bản của một Checkpoint cụ thể.",
+        "operationId": "list_checkpoint_submissions_by_path_api_v1_checkpoints__checkpoint_id__submissions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "include_history",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include History"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_SubmissionResponse__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/checkpoints/{checkpoint_id}/toggle-active": {
+      "patch": {
+        "tags": [
+          "Checkpoints (HF-32)"
+        ],
+        "summary": "Khóa hoặc Mở kích hoạt mốc Checkpoint (Chỉ Admin)",
+        "description": "Ban Tổ Chức (BTC) chủ động khóa khẩn cấp hoặc mở lại cổng Checkpoint.",
+        "operationId": "toggle_active_checkpoint_api_v1_checkpoints__checkpoint_id__toggle_active_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointToggleActiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CheckpointResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/submissions": {
+      "post": {
+        "tags": [
+          "Submissions & Audit Log (HF-34)"
+        ],
+        "summary": "Nộp bài hoặc cập nhật bài nộp cho Checkpoint (HF-34 & SRS HF-23)",
+        "description": "API tiếp nhận, xác thực và lưu trữ bài nộp Checkpoint (HF-34 & SRS HF-23 Mục 2, 3, 4, 5, 6):\n- Kiểm tra tài khoản `APPROVED` (403 `ACCOUNT_NOT_APPROVED`) và vai trò `TEAM_LEADER` (403 `FORBIDDEN_NOT_TEAM_LEADER`).\n- Kiểm tra trạng thái mở cổng Checkpoint (400 `INVALID_CHECKPOINT_STATUS`) và hạn chót kèm Grace Period (400 `DEADLINE_EXCEEDED`).\n- Hỗ trợ `Idempotency-Key` và phát hiện request trùng lặp trong cửa sổ 10 giây.\n- Kiểm tra đầy đủ trường động `submission_fields` (422 `MISSING_REQUIRED_FIELD`).\n- Ghi nhận trạng thái trung gian `pending_sha_freeze` kèm `submitted_at` của Server trước khi gọi GitHub API.\n- Đối với `is_final_checkpoint = true`: đóng băng HEAD Commit SHA từ GitHub (HF-33); tự động rollback về bản `submitted` hợp lệ trước đó nếu repo lỗi 422; hoặc kích hoạt Graceful Fallback (`sha_verification_failed`, 200 OK) nếu GitHub API gián đoạn 503.\n- Ghi vết vào bảng `audit_logs` kèm cờ `late_grace_period`.",
+        "operationId": "create_or_update_submission_api_v1_submissions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Khóa chống gửi trùng lặp (UUID) từ phía Client",
+              "title": "Idempotency-Key"
+            },
+            "description": "Khóa chống gửi trùng lặp (UUID) từ phía Client"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmissionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SubmissionResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Submissions & Audit Log (HF-34)"
+        ],
+        "summary": "Lấy danh sách bài nộp và lịch sử phiên bản (HF-31 & HF-34)",
+        "description": "Truy vấn danh sách bài nộp và lịch sử các phiên bản nộp lại (Resubmission Version History).",
+        "operationId": "list_submissions_api_v1_submissions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo UUID của Checkpoint",
+              "title": "Checkpoint Id"
+            },
+            "description": "Lọc theo UUID của Checkpoint"
+          },
+          {
+            "name": "team_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo UUID của Đội thi (Dành cho Admin/Judge/Mentor)",
+              "title": "Team Id"
+            },
+            "description": "Lọc theo UUID của Đội thi (Dành cho Admin/Judge/Mentor)"
+          },
+          {
+            "name": "include_history",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "True: Trả kèm các phiên bản lịch sử trước đó (phục vụ bảng lịch sử nộp bài HF-31)",
+              "default": true,
+              "title": "Include History"
+            },
+            "description": "True: Trả kèm các phiên bản lịch sử trước đó (phục vụ bảng lịch sử nộp bài HF-31)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_SubmissionResponse__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/submissions/audit-logs": {
+      "get": {
+        "tags": [
+          "Submissions & Audit Log (HF-34)"
+        ],
+        "summary": "Truy vấn nhật ký Audit Log nộp bài & gia hạn Checkpoint (HF-34)",
+        "description": "Truy vấn bảng `audit_logs` phục vụ rà soát của Ban tổ chức và đối chiếu cờ `late_grace_period`.",
+        "operationId": "list_submission_audit_logs_api_v1_submissions_audit_logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpoint_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo UUID của Checkpoint",
+              "title": "Checkpoint Id"
+            },
+            "description": "Lọc theo UUID của Checkpoint"
+          },
+          {
+            "name": "team_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo UUID của Đội thi",
+              "title": "Team Id"
+            },
+            "description": "Lọc theo UUID của Đội thi"
+          },
+          {
+            "name": "submission_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo UUID của Bài nộp",
+              "title": "Submission Id"
+            },
+            "description": "Lọc theo UUID của Bài nộp"
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo mã hành động (vd: SUBMISSION_CREATED, SUBMISSION_RESUBMITTED)",
+              "title": "Action"
+            },
+            "description": "Lọc theo mã hành động (vd: SUBMISSION_CREATED, SUBMISSION_RESUBMITTED)"
+          },
+          {
+            "name": "late_grace_period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc các lượt nộp bài trong khoảng ân hạn mạng (Grace Period)",
+              "title": "Late Grace Period"
+            },
+            "description": "Lọc các lượt nộp bài trong khoảng ân hạn mạng (Grace Period)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_AuditLogResponse__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/submissions/{submission_id}": {
+      "get": {
+        "tags": [
+          "Submissions & Audit Log (HF-34)"
+        ],
+        "summary": "Xem chi tiết một bản ghi bài nộp theo ID",
+        "description": "Xem chi tiết thông tin bài nộp, Commit SHA đóng băng và lịch sử các phiên bản trước đó.",
+        "operationId": "get_submission_detail_api_v1_submissions__submission_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SubmissionResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/announcements": {
+      "post": {
+        "tags": [
+          "Announcements (HF-27)"
+        ],
+        "summary": "Tạo thông báo mới (Chỉ Admin/BTC)",
+        "description": "Tạo thông báo mới cho cuộc thi.\nYêu cầu quyền Admin/BTC — trả 403 FORBIDDEN nếu không đủ quyền.\nDữ liệu không hợp lệ sẽ trả 422.",
+        "operationId": "create_announcement_api_v1_announcements_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AnnouncementResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Announcements (HF-27)"
+        ],
+        "summary": "Xem danh sách thông báo (phân trang)",
+        "description": "Lấy danh sách thông báo với phân trang.\nMọi User đã đăng nhập đều có quyền truy cập.\nKết quả sắp xếp theo thời gian tạo giảm dần (mới nhất lên trước).",
+        "operationId": "list_announcements_api_v1_announcements_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Số trang (bắt đầu từ 1)",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Số trang (bắt đầu từ 1)"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Số bản ghi mỗi trang",
+              "default": 10,
+              "title": "Page Size"
+            },
+            "description": "Số bản ghi mỗi trang"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AnnouncementPaginationResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/announcements/{announcement_id}": {
+      "put": {
+        "tags": [
+          "Announcements (HF-27)"
+        ],
+        "summary": "Cập nhật thông báo (Chỉ Admin/BTC)",
+        "description": "Cập nhật nội dung thông báo theo ID.\nYêu cầu quyền Admin/BTC — trả 403 nếu không đủ quyền, 404 nếu không tìm thấy.",
+        "operationId": "update_announcement_api_v1_announcements__announcement_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "announcement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Announcement Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AnnouncementResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Announcements (HF-27)"
+        ],
+        "summary": "Xóa thông báo (Chỉ Admin/BTC)",
+        "description": "Xóa thông báo theo ID.\nYêu cầu quyền Admin/BTC — trả 403 nếu không đủ quyền, 404 nếu không tìm thấy.",
+        "operationId": "delete_announcement_api_v1_announcements__announcement_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "announcement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Announcement Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AnnouncementResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rubrics": {
+      "get": {
+        "tags": [
+          "Rubrics (HF-42)"
+        ],
+        "summary": "Get active judging rubric criteria (HF-42)",
+        "operationId": "get_rubrics_api_v1_rubrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Rubrics (HF-42)"
+        ],
+        "summary": "Configure judging rubric criteria (Admin only, HF-42)",
+        "operationId": "configure_rubrics_api_v1_rubrics_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RubricConfigureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/evaluations/submissions": {
+      "get": {
+        "tags": [
+          "Evaluations & Blind Judging (HF-42)"
+        ],
+        "summary": "List Final Checkpoint submissions in Blind Judging mode (HF-42)",
+        "operationId": "list_blind_submissions_api_v1_evaluations_submissions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/evaluations/submissions/{submission_id}": {
+      "get": {
+        "tags": [
+          "Evaluations & Blind Judging (HF-42)"
+        ],
+        "summary": "Get a single Final Checkpoint submission in Blind Judging mode (HF-42)",
+        "operationId": "get_blind_submission_detail_api_v1_evaluations_submissions__submission_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations": {
+      "post": {
+        "tags": [
+          "Evaluations & Blind Judging (HF-42)"
+        ],
+        "summary": "Save draft or submit locked evaluation scores (HF-42)",
+        "operationId": "submit_or_save_evaluation_api_v1_evaluations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/evaluations/{submission_id}/judges/{judge_id}/unlock": {
+      "patch": {
+        "tags": [
+          "Evaluations & Blind Judging (HF-42)"
+        ],
+        "summary": "Admin unlocks a locked evaluation for re-assessment (HF-42 / AC-18.3)",
+        "operationId": "unlock_evaluation_api_v1_admin_evaluations__submission_id__judges__judge_id__unlock_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "judge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Judge Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AdminUnlockEvaluationRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/evaluations/assignments": {
+      "post": {
+        "tags": [
+          "Evaluations & Blind Judging (HF-42)"
+        ],
+        "summary": "Admin assigns a judge to specific submissions or teams (US-14 / HF-42)",
+        "operationId": "assign_judge_api_v1_admin_evaluations_assignments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JudgeAssignmentCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/leaderboard": {
+      "get": {
+        "tags": [
+          "Leaderboard & Results (HF-43)"
+        ],
+        "summary": "Get competition leaderboard (Draft for Admin, Published for all, HF-43)",
+        "operationId": "get_leaderboard_api_v1_leaderboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/leaderboard/publish": {
+      "patch": {
+        "tags": [
+          "Leaderboard & Results (HF-43)"
+        ],
+        "summary": "Publish or unpublish the official competition leaderboard (Admin only, HF-43)",
+        "operationId": "publish_leaderboard_api_v1_admin_leaderboard_publish_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PublishLeaderboardRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Root"
+        ],
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdminUnlockEvaluationRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "default": "Admin unlocked evaluation for re-assessment"
+          }
+        },
+        "type": "object",
+        "title": "AdminUnlockEvaluationRequest",
+        "description": "Optional request body for PATCH /api/v1/admin/evaluations/{submission_id}/judges/{judge_id}/unlock."
+      },
+      "AnnouncementCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "description": "Tiêu đề thông báo"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Content",
+            "description": "Nội dung thông báo"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/AnnouncementPriorityEnum",
+            "description": "Mức độ ưu tiên: info | warning | urgent",
+            "default": "info"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "AnnouncementCreate",
+        "description": "Schema for creating a new announcement (POST request body)."
+      },
+      "AnnouncementPaginationResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AnnouncementResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "AnnouncementPaginationResponse",
+        "description": "Paginated list response for announcements."
+      },
+      "AnnouncementPriorityEnum": {
+        "type": "string",
+        "enum": [
+          "info",
+          "warning",
+          "urgent"
+        ],
+        "title": "AnnouncementPriorityEnum",
+        "description": "Mirror of model enum for schema validation."
+      },
+      "AnnouncementResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "content",
+          "priority",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AnnouncementResponse",
+        "description": "Schema for returning a single announcement."
+      },
+      "AnnouncementUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Tiêu đề thông báo"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content",
+            "description": "Nội dung thông báo"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnouncementPriorityEnum"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mức độ ưu tiên: info | warning | urgent"
+          }
+        },
+        "type": "object",
+        "title": "AnnouncementUpdate",
+        "description": "Schema for updating an announcement (PUT request body). All fields optional."
+      },
+      "ApiResponse_AnnouncementPaginationResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnouncementPaginationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[AnnouncementPaginationResponse]"
+      },
+      "ApiResponse_AnnouncementResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnouncementResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[AnnouncementResponse]"
+      },
+      "ApiResponse_CheckpointResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[CheckpointResponse]"
+      },
+      "ApiResponse_CheckpointTimeGatedStatusResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointTimeGatedStatusResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[CheckpointTimeGatedStatusResponse]"
+      },
+      "ApiResponse_DemoPayload_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DemoPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[DemoPayload]"
+      },
+      "ApiResponse_Dict_str__Any__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[Dict[str, Any]]"
+      },
+      "ApiResponse_GitHubOAuthUrlResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GitHubOAuthUrlResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[GitHubOAuthUrlResponse]"
+      },
+      "ApiResponse_HealthCheckData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthCheckData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[HealthCheckData]"
+      },
+      "ApiResponse_List_AuditLogResponse__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AuditLogResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[List[AuditLogResponse]]"
+      },
+      "ApiResponse_List_CandidatePendingResponse__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CandidatePendingResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[List[CandidatePendingResponse]]"
+      },
+      "ApiResponse_List_CheckpointResponse__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CheckpointResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[List[CheckpointResponse]]"
+      },
+      "ApiResponse_List_SubmissionResponse__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SubmissionResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[List[SubmissionResponse]]"
+      },
+      "ApiResponse_List_TopicResponse__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TopicResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[List[TopicResponse]]"
+      },
+      "ApiResponse_List_WhitelistEntryResponse__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WhitelistEntryResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[List[WhitelistEntryResponse]]"
+      },
+      "ApiResponse_ProfileUpdateResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileUpdateResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[ProfileUpdateResponse]"
+      },
+      "ApiResponse_SubmissionResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[SubmissionResponse]"
+      },
+      "ApiResponse_TeamResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TeamResponse]"
+      },
+      "ApiResponse_TokenResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TokenResponse]"
+      },
+      "ApiResponse_TopicSelectResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopicSelectResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TopicSelectResponse]"
+      },
+      "ApiResponse_Union_TeamResponse__NoneType__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[Union[TeamResponse, NoneType]]"
+      },
+      "ApiResponse_UserResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[UserResponse]"
+      },
+      "ApiResponse_ValidateSubmissionWindowResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidateSubmissionWindowResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[ValidateSubmissionWindowResponse]"
+      },
+      "ApiResponse_VerifyGitHubRepoResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VerifyGitHubRepoResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[VerifyGitHubRepoResponse]"
+      },
+      "ApiResponse_WhitelistBulkAddResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhitelistBulkAddResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[WhitelistBulkAddResponse]"
+      },
+      "ApiResponse_WhitelistDeactivateResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhitelistDeactivateResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[WhitelistDeactivateResponse]"
+      },
+      "ApiResponse_WhitelistEntryResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhitelistEntryResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[WhitelistEntryResponse]"
+      },
+      "ApiResponse_dict_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[dict]"
+      },
+      "AuditLogResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "late_grace_period": {
+            "type": "boolean",
+            "title": "Late Grace Period",
+            "default": false
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "status",
+          "created_at"
+        ],
+        "title": "AuditLogResponse",
+        "description": "Response schema for Audit Log records (HF-34 & UAT-CP-05 / UAT-CP-13)."
+      },
+      "CandidateApprovalRequest": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "CandidateApprovalRequest",
+        "description": "Body for BTC to approve or reject a PENDING candidate."
+      },
+      "CandidatePendingResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "github_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Username"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "student_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Student Id"
+          },
+          "school": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "School"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "CandidatePendingResponse"
+      },
+      "CheckpointCreateRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 3,
+            "title": "Title",
+            "description": "Tên mốc checkpoint / milestone"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Mô tả chi tiết yêu cầu mốc nộp bài"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Time",
+            "description": "Thời điểm mở cổng nộp bài (ISO 8601 UTC)"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deadline",
+            "description": "Hạn chót đóng cổng nộp bài (ISO 8601 UTC)"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirements",
+            "description": "Chi tiết các tiêu chí/tệp cần nộp (Markdown)"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "Trạng thái kích hoạt mốc checkpoint của BTC",
+            "default": true
+          },
+          "is_final_checkpoint": {
+            "type": "boolean",
+            "title": "Is Final Checkpoint",
+            "description": "True: Checkpoint chốt sản phẩm cuối cùng; False: Checkpoint trung gian",
+            "default": false
+          },
+          "grace_period_seconds": {
+            "type": "integer",
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Grace Period Seconds",
+            "description": "Thời gian ân hạn mạng riêng từng checkpoint (0 - 300 giây, mặc định 5s)",
+            "default": 5
+          },
+          "submission_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SubmissionFieldConfig"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Fields",
+            "description": "Cấu hình các trường nộp bài động"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "start_time",
+          "deadline"
+        ],
+        "title": "CheckpointCreateRequest"
+      },
+      "CheckpointResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Time"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deadline"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirements"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "is_final_checkpoint": {
+            "type": "boolean",
+            "title": "Is Final Checkpoint",
+            "description": "True nếu là checkpoint chốt sản phẩm HEAD Commit SHA",
+            "default": false
+          },
+          "submission_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Fields",
+            "description": "Danh sách các trường nộp bài động"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "upcoming | open | grace_period | closed"
+          },
+          "is_open": {
+            "type": "boolean",
+            "title": "Is Open",
+            "description": "True nếu cổng đang mở hoặc đang trong thời gian ân hạn mạng"
+          },
+          "can_submit": {
+            "type": "boolean",
+            "title": "Can Submit",
+            "description": "True nếu cho phép nộp bài tại thời điểm hiện tại"
+          },
+          "grace_period_seconds": {
+            "type": "integer",
+            "title": "Grace Period Seconds",
+            "description": "Thời gian ân hạn mạng cho phép (giây)",
+            "default": 5
+          },
+          "time_remaining_seconds": {
+            "type": "integer",
+            "title": "Time Remaining Seconds",
+            "description": "Số giây còn lại đến deadline chính thức (0 nếu đã quá hạn)",
+            "default": 0
+          },
+          "time_until_start_seconds": {
+            "type": "integer",
+            "title": "Time Until Start Seconds",
+            "description": "Số giây đếm ngược đến lúc mở cổng (0 nếu đã mở)",
+            "default": 0
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Time",
+            "description": "Thời gian hiện tại của Server chuẩn UTC"
+          },
+          "latest_submission": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Submission",
+            "description": "Bài nộp mới nhất của đội thi hiện tại cho mốc checkpoint này (nếu có)"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "start_time",
+          "deadline",
+          "is_active",
+          "status",
+          "is_open",
+          "can_submit",
+          "server_time"
+        ],
+        "title": "CheckpointResponse"
+      },
+      "CheckpointTimeGatedStatusResponse": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "title": "Checkpoint Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Time"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Time"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deadline"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "is_open": {
+            "type": "boolean",
+            "title": "Is Open"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "can_submit": {
+            "type": "boolean",
+            "title": "Can Submit"
+          },
+          "grace_period_applied": {
+            "type": "boolean",
+            "title": "Grace Period Applied"
+          },
+          "grace_period_seconds": {
+            "type": "integer",
+            "title": "Grace Period Seconds",
+            "default": 5
+          },
+          "is_final_checkpoint": {
+            "type": "boolean",
+            "title": "Is Final Checkpoint",
+            "default": false
+          },
+          "time_remaining_seconds": {
+            "type": "integer",
+            "title": "Time Remaining Seconds"
+          },
+          "time_until_start_seconds": {
+            "type": "integer",
+            "title": "Time Until Start Seconds"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "title",
+          "server_time",
+          "start_time",
+          "deadline",
+          "is_active",
+          "is_open",
+          "status",
+          "can_submit",
+          "grace_period_applied",
+          "time_remaining_seconds",
+          "time_until_start_seconds",
+          "message"
+        ],
+        "title": "CheckpointTimeGatedStatusResponse"
+      },
+      "CheckpointToggleActiveRequest": {
+        "properties": {
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "True: Mở kích hoạt; False: Tạm khóa bởi BTC"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_active"
+        ],
+        "title": "CheckpointToggleActiveRequest"
+      },
+      "CheckpointUpdateRequest": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirements"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "is_final_checkpoint": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Final Checkpoint"
+          },
+          "grace_period_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 300.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Period Seconds"
+          },
+          "submission_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SubmissionFieldConfig"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Fields"
+          }
+        },
+        "type": "object",
+        "title": "CheckpointUpdateRequest"
+      },
+      "CheckpointValidateWindowRequest": {
+        "properties": {
+          "simulate_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulate Time",
+            "description": "Thời điểm giả lập để kiểm thử UAT/QA (Chỉ áp dụng khi Admin test). Mặc định là thời gian thực của server."
+          }
+        },
+        "type": "object",
+        "title": "CheckpointValidateWindowRequest"
+      },
+      "DemoPayload": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "title": "Name",
+            "description": "Tên demo tối thiểu 3 ký tự"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "Email hợp lệ"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "DemoPayload"
+      },
+      "EvaluationCriterionScoreInput": {
+        "properties": {
+          "criteria_id": {
+            "type": "string",
+            "title": "Criteria Id"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "criteria_id"
+        ],
+        "title": "EvaluationCriterionScoreInput",
+        "description": "Input score and commentary for a single rubric criterion."
+      },
+      "EvaluationSubmitRequest": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "draft"
+          },
+          "evaluations": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationCriterionScoreInput"
+            },
+            "type": "array",
+            "title": "Evaluations"
+          },
+          "general_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "General Comment"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id"
+        ],
+        "title": "EvaluationSubmitRequest",
+        "description": "Request schema for POST /api/v1/evaluations (Judge)."
+      },
+      "GitHubOAuthCallbackRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Mã xác thực code trả về từ GitHub OAuth redirect"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State",
+            "description": "State token chống CSRF"
+          },
+          "redirect_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Uri",
+            "description": "URL callback động của Frontend hiện tại"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "GitHubOAuthCallbackRequest"
+      },
+      "GitHubOAuthUrlResponse": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "client_id"
+        ],
+        "title": "GitHubOAuthUrlResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthCheckData": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "database": {
+            "type": "string",
+            "title": "Database"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "project",
+          "version",
+          "environment",
+          "timestamp",
+          "database"
+        ],
+        "title": "HealthCheckData"
+      },
+      "JudgeAssignmentCreateRequest": {
+        "properties": {
+          "judge_id": {
+            "type": "string",
+            "title": "Judge Id"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
+          "submission_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ids"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "judge_id"
+        ],
+        "title": "JudgeAssignmentCreateRequest",
+        "description": "Request body for assigning a judge to one or more submissions/teams."
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "Email tài khoản"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "title": "Password",
+            "description": "Mật khẩu tài khoản (tối thiểu 6 ký tự)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "ProfileUpdateRequest": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "minLength": 2,
+            "title": "Full Name",
+            "description": "Họ và tên thí sinh"
+          },
+          "student_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Student Id",
+            "description": "Mã số sinh viên"
+          },
+          "school": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "School",
+            "description": "Trường / Học viện"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone",
+            "description": "Số điện thoại liên hệ"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills",
+            "description": "Danh sách kỹ năng"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name"
+        ],
+        "title": "ProfileUpdateRequest"
+      },
+      "ProfileUpdateResponse": {
+        "properties": {
+          "approval_status": {
+            "type": "string",
+            "title": "Approval Status"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "approval_status",
+          "role",
+          "message",
+          "user"
+        ],
+        "title": "ProfileUpdateResponse"
+      },
+      "PublishLeaderboardRequest": {
+        "properties": {
+          "is_result_published": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Result Published",
+            "default": true
+          },
+          "unpublish": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpublish",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "PublishLeaderboardRequest",
+        "description": "Request body for PATCH /api/v1/admin/leaderboard/publish (HF-43 / SRS HF-36)."
+      },
+      "RegisterRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "Email tài khoản"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "title": "Password",
+            "description": "Mật khẩu tối thiểu 6 ký tự"
+          },
+          "full_name": {
+            "type": "string",
+            "minLength": 2,
+            "title": "Full Name",
+            "description": "Họ và tên đầy đủ"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role",
+            "description": "Vai trò: candidate, judge, mentor, admin",
+            "default": "candidate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "full_name"
+        ],
+        "title": "RegisterRequest"
+      },
+      "RubricConfigureRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "default": "HackFlow Final Rubric"
+          },
+          "criteria": {
+            "items": {
+              "$ref": "#/components/schemas/RubricCriterionInput"
+            },
+            "type": "array",
+            "title": "Criteria"
+          }
+        },
+        "type": "object",
+        "title": "RubricConfigureRequest",
+        "description": "Request schema for POST /api/v1/rubrics (Admin only)."
+      },
+      "RubricCriterionInput": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "max_score": {
+            "type": "number",
+            "title": "Max Score",
+            "default": 10.0
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "is_required": {
+            "type": "boolean",
+            "title": "Is Required",
+            "default": true
+          },
+          "display_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Order"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "weight"
+        ],
+        "title": "RubricCriterionInput",
+        "description": "Input schema for a single rubric criterion when configuring a rubric."
+      },
+      "SubmissionCreateRequest": {
+        "properties": {
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id",
+            "description": "UUID của mốc Checkpoint cần nộp bài (bắt buộc khi gọi POST /api/v1/submissions)"
+          },
+          "submission_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Data",
+            "description": "Dữ liệu các trường động theo cấu hình submission_fields của checkpoint (vd: repo_url, demo_url, slide_url)"
+          },
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url",
+            "description": "Đường dẫn kho mã nguồn GitHub (có thể truyền trực tiếp hoặc nằm trong submission_data)"
+          },
+          "demo_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demo Url",
+            "description": "Đường dẫn Live Demo / Tài liệu báo cáo (có thể truyền trực tiếp hoặc nằm trong submission_data)"
+          },
+          "slide_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Url",
+            "description": "Đường dẫn Slide thuyết trình (nếu truyền trực tiếp)"
+          },
+          "presentation_pdf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presentation Pdf",
+            "description": "Đường dẫn file thuyết trình PDF (nếu truyền trực tiếp)"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Ghi chú bổ sung cho lần nộp bài (tối đa 500 ký tự)"
+          },
+          "simulate_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulate Time",
+            "description": "Thời điểm giả lập của Server (ISO 8601 UTC) phục vụ kiểm thử UAT Time-Gated & Grace Period"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "SubmissionCreateRequest",
+        "description": "Request schema for POST /api/v1/submissions and POST /api/v1/checkpoints/{checkpoint_id}/submissions (HF-34 & SRS HF-23).\nSupports both structured `submission_data` dict and top-level dynamic fields for full Frontend & Postman compatibility."
+      },
+      "SubmissionFieldConfig": {
+        "properties": {
+          "field_key": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Field Key",
+            "description": "Khóa định danh trường (vd: repo_url, presentation_pdf)"
+          },
+          "field_label": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Field Label",
+            "description": "Tên nhãn hiển thị cho thí sinh"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "description": "Bắt buộc phải nộp hay tùy chọn",
+            "default": true
+          },
+          "apply_sha_freeze": {
+            "type": "boolean",
+            "title": "Apply Sha Freeze",
+            "description": "True nếu trường này chứa GitHub Repo để freeze SHA",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_key",
+          "field_label"
+        ],
+        "title": "SubmissionFieldConfig"
+      },
+      "SubmissionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "UUID định danh bản ghi nộp bài"
+          },
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id",
+            "description": "UUID định danh bản ghi nộp bài (alias chuẩn SRS Mục 6)"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "title": "Checkpoint Id",
+            "description": "UUID của mốc Checkpoint"
+          },
+          "team_id": {
+            "type": "string",
+            "title": "Team Id",
+            "description": "UUID của Đội thi"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By",
+            "description": "UUID của Đội trưởng thực hiện nộp bài"
+          },
+          "repo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Url",
+            "description": "URL kho mã nguồn GitHub đã chuẩn hóa"
+          },
+          "demo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demo Url",
+            "description": "URL bản Demo / Báo cáo tiến độ"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "Mã hash SHA-1 40 ký tự đóng băng tại thời điểm nộp (chỉ có ở Final Checkpoint)"
+          },
+          "submission_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Data",
+            "description": "Toàn bộ dữ liệu trường động đã nộp"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Ghi chú lần nộp bài của đội thi"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback",
+            "description": "Nhận xét từ Ban giám khảo / Mentor"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Trạng thái bài nộp: 'submitted' | 'pending_sha_freeze' | 'sha_verification_failed' | 'evaluated' | 'late' | 'invalid'"
+          },
+          "grace_period_applied": {
+            "type": "boolean",
+            "title": "Grace Period Applied",
+            "description": "True nếu bài nộp được tiếp nhận trong khoảng thời gian ân hạn mạng (Grace Period)",
+            "default": false
+          },
+          "late_grace_period": {
+            "type": "boolean",
+            "title": "Late Grace Period",
+            "description": "Cờ đánh dấu bài nộp trong vùng Grace Period (tương đương grace_period_applied)",
+            "default": false
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "description": "Số thứ tự phiên bản nộp bài (v1, v2, ...)",
+            "default": 1
+          },
+          "version_history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Version History",
+            "description": "Danh sách lịch sử các phiên bản nộp trước đó khi Đội trưởng nộp lại (Resubmission)"
+          },
+          "is_duplicate": {
+            "type": "boolean",
+            "title": "Is Duplicate",
+            "description": "True nếu hệ thống phát hiện request trùng lặp trong cửa sổ Idempotency (10s hoặc Idempotency-Key)",
+            "default": false
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Submitted At",
+            "description": "Thời điểm Server tiếp nhận bài nộp (UTC)"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "submission_id",
+          "checkpoint_id",
+          "team_id",
+          "status",
+          "submitted_at"
+        ],
+        "title": "SubmissionResponse",
+        "description": "Standardized response schema for Checkpoint Submission (HF-34, SRS HF-23 Mục 6 & HF-35 Mục 3).\n`status` uses lowercase snake_case ('submitted', 'pending_sha_freeze', 'sha_verification_failed', 'evaluated', 'late', 'invalid')."
+      },
+      "SubtopicResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "topic_id": {
+            "type": "string",
+            "title": "Topic Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "max_teams": {
+            "type": "integer",
+            "title": "Max Teams"
+          },
+          "current_teams": {
+            "type": "integer",
+            "title": "Current Teams"
+          },
+          "remaining_slots": {
+            "type": "integer",
+            "title": "Remaining Slots"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "topic_id",
+          "title",
+          "max_teams",
+          "current_teams",
+          "remaining_slots",
+          "is_active"
+        ],
+        "title": "SubtopicResponse"
+      },
+      "TeamCreateRequest": {
+        "properties": {
+          "team_name": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 3,
+            "title": "Team Name",
+            "description": "Tên đội thi (3-50 ký tự, không chứa khoảng trắng thừa)",
+            "examples": [
+              "CyberWarriors"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_name"
+        ],
+        "title": "TeamCreateRequest"
+      },
+      "TeamJoinRequest": {
+        "properties": {
+          "invite_code": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 6,
+            "title": "Invite Code",
+            "description": "Mã mời tham gia đội (6 ký tự)",
+            "examples": [
+              "A1B2C3"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "invite_code"
+        ],
+        "title": "TeamJoinRequest"
+      },
+      "TeamMemberResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "github_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Username"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Joined At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "full_name",
+          "email",
+          "role",
+          "joined_at"
+        ],
+        "title": "TeamMemberResponse"
+      },
+      "TeamResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "team_name": {
+            "type": "string",
+            "title": "Team Name"
+          },
+          "invite_code": {
+            "type": "string",
+            "title": "Invite Code"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "is_locked": {
+            "type": "boolean",
+            "title": "Is Locked",
+            "default": false
+          },
+          "member_count": {
+            "type": "integer",
+            "title": "Member Count"
+          },
+          "min_members": {
+            "type": "integer",
+            "title": "Min Members",
+            "default": 3
+          },
+          "max_members": {
+            "type": "integer",
+            "title": "Max Members",
+            "default": 5
+          },
+          "leader_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader Id"
+          },
+          "topic_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Id"
+          },
+          "topic_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Name"
+          },
+          "subtopic_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtopic Id"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/TeamMemberResponse"
+            },
+            "type": "array",
+            "title": "Members",
+            "default": []
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "team_name",
+          "invite_code",
+          "status",
+          "member_count"
+        ],
+        "title": "TeamResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "user"
+        ],
+        "title": "TokenResponse"
+      },
+      "TopicCancelRequest": {
+        "properties": {
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id",
+            "description": "ID của đội thi cần hủy đề tài (mặc định lấy đội của user)"
+          }
+        },
+        "type": "object",
+        "title": "TopicCancelRequest"
+      },
+      "TopicResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "max_teams": {
+            "type": "integer",
+            "title": "Max Teams"
+          },
+          "current_teams": {
+            "type": "integer",
+            "title": "Current Teams"
+          },
+          "remaining_slots": {
+            "type": "integer",
+            "title": "Remaining Slots"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "subtopics": {
+            "items": {
+              "$ref": "#/components/schemas/SubtopicResponse"
+            },
+            "type": "array",
+            "title": "Subtopics",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "max_teams",
+          "current_teams",
+          "remaining_slots",
+          "is_active",
+          "status"
+        ],
+        "title": "TopicResponse"
+      },
+      "TopicSelectRequest": {
+        "properties": {
+          "topic_id": {
+            "type": "string",
+            "title": "Topic Id",
+            "description": "ID của đề tài chính cần chọn"
+          },
+          "subtopic_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtopic Id",
+            "description": "ID của đề tài phụ / subtopic (nếu có)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic_id"
+        ],
+        "title": "TopicSelectRequest"
+      },
+      "TopicSelectResponse": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "topic_id": {
+            "type": "string",
+            "title": "Topic Id"
+          },
+          "subtopic_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtopic Id"
+          },
+          "topic_title": {
+            "type": "string",
+            "title": "Topic Title"
+          },
+          "remaining_slots": {
+            "type": "integer",
+            "title": "Remaining Slots"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "topic_id",
+          "topic_title",
+          "remaining_slots"
+        ],
+        "title": "TopicSelectResponse"
+      },
+      "UserResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "approval_status": {
+            "type": "string",
+            "title": "Approval Status"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "github_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Id"
+          },
+          "github_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Github Username"
+          },
+          "student_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Student Id"
+          },
+          "school": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "School"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "full_name",
+          "role",
+          "approval_status"
+        ],
+        "title": "UserResponse"
+      },
+      "ValidateSubmissionWindowResponse": {
+        "properties": {
+          "is_valid": {
+            "type": "boolean",
+            "title": "Is Valid"
+          },
+          "grace_period_applied": {
+            "type": "boolean",
+            "title": "Grace Period Applied"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "title": "Checkpoint Id"
+          },
+          "checkpoint_title": {
+            "type": "string",
+            "title": "Checkpoint Title"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Time"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_valid",
+          "grace_period_applied",
+          "checkpoint_id",
+          "checkpoint_title",
+          "server_time",
+          "message"
+        ],
+        "title": "ValidateSubmissionWindowResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VerifyGitHubRepoRequest": {
+        "properties": {
+          "repo_url": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 5,
+            "title": "Repo Url",
+            "description": "Đường dẫn repository GitHub (vd: https://github.com/owner/repo hoặc đuôi .git)",
+            "examples": [
+              "https://github.com/torvalds/linux"
+            ]
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch",
+            "description": "Tên nhánh cần lấy SHA (tùy chọn). Mặc định lấy commit HEAD của default branch."
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_url"
+        ],
+        "title": "VerifyGitHubRepoRequest",
+        "description": "Request model for inspecting public GitHub repository and latest HEAD commit."
+      },
+      "VerifyGitHubRepoResponse": {
+        "properties": {
+          "repo_url": {
+            "type": "string",
+            "title": "Repo Url"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "repo": {
+            "type": "string",
+            "title": "Repo"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "Mã hash SHA-1 40 ký tự của commit HEAD mới nhất"
+          },
+          "commit_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Message",
+            "description": "Tiêu đề commit mới nhất"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author",
+            "description": "Tên tác giả commit"
+          },
+          "committed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Committed At",
+            "description": "Thời điểm commit chuẩn UTC"
+          },
+          "html_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Url",
+            "description": "Link xem commit trực tiếp trên GitHub"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Trạng thái xác thực theo SRS HF-23: 'submitted' | 'sha_verification_failed'",
+            "default": "submitted"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code",
+            "description": "Mã lỗi nghiệp vụ nếu kích hoạt fallback (vd: 'GITHUB_API_UNAVAILABLE')"
+          },
+          "retry_attempts": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Retry Attempts",
+            "description": "Số lần đã gọi thử GitHub REST API (tối đa 3 lần khi gặp sự cố mạng/5xx/rate-limit)",
+            "default": 1
+          },
+          "is_verified": {
+            "type": "boolean",
+            "title": "Is Verified",
+            "description": "True nếu xác thực SHA thành công"
+          },
+          "is_fallback": {
+            "type": "boolean",
+            "title": "Is Fallback",
+            "description": "True nếu GitHub API gặp sự cố và kích hoạt Graceful Fallback chuyển sang đối soát thủ công",
+            "default": false
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Thông báo chi tiết kết quả xác thực"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_url",
+          "owner",
+          "repo",
+          "is_verified",
+          "message"
+        ],
+        "title": "VerifyGitHubRepoResponse",
+        "description": "Response model returning extracted commit metadata and verification status."
+      },
+      "WhitelistAddRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "WhitelistAddRequest"
+      },
+      "WhitelistBulkAddRequest": {
+        "properties": {
+          "emails": {
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "type": "array",
+            "title": "Emails"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "emails"
+        ],
+        "title": "WhitelistBulkAddRequest"
+      },
+      "WhitelistBulkAddResponse": {
+        "properties": {
+          "imported": {
+            "type": "integer",
+            "title": "Imported"
+          },
+          "emails": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Emails"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imported",
+          "emails"
+        ],
+        "title": "WhitelistBulkAddResponse"
+      },
+      "WhitelistDeactivateResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "is_active"
+        ],
+        "title": "WhitelistDeactivateResponse"
+      },
+      "WhitelistEntryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "added_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added By"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "is_active"
+        ],
+        "title": "WhitelistEntryResponse"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Access Token được cấp sau khi đăng nhập /auth/login hoặc /auth/github/callback. Thêm header: `Authorization: Bearer <token>`."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Kiểm tra tình trạng hoạt động của hệ thống, môi trường và kết nối cơ sở dữ liệu Supabase/PostgreSQL."
+    },
+    {
+      "name": "Auth (HF-19)",
+      "description": "Xác thực & Phân quyền: Đăng nhập/Đăng ký nội bộ, GitHub OAuth 2.0 flow, cấp phát JWT Bearer Token và quản lý thông tin tài khoản hiện tại."
+    },
+    {
+      "name": "Admin",
+      "description": "Dành cho Ban Tổ Chức (BTC): Quản lý Whitelist email (cho phép thí sinh đăng nhập), phê duyệt hoặc từ chối đơn đăng ký ứng viên."
+    },
+    {
+      "name": "Teams (HF-20)",
+      "description": "Quản lý Đội thi: Tạo đội mới (tự sinh mã mời 6 ký tự ngẫu nhiên), tham gia đội qua mã mời, xem thông tin đội của tôi, kiểm tra ràng buộc số lượng thành viên (3 - 5 người)."
+    },
+    {
+      "name": "Topics (HF-21)",
+      "description": "Quản lý Đề tài thi: Xem danh sách đề tài & Quota giới hạn số đội, đăng ký đề tài bằng giao dịch nguyên tử chống tranh chấp đồng thời (SELECT FOR UPDATE) và hủy chọn đề tài."
+    },
+    {
+      "name": "Checkpoints (HF-32)",
+      "description": "Quản lý mốc Checkpoint nộp bài & Kiểm tra Time-gated (Mở/Khóa cổng nộp bài, thời gian ân hạn mạng 5 giây)."
+    },
+    {
+      "name": "Examples & Envelope Demo",
+      "description": "Minh họa chuẩn định dạng API Envelope (ApiResponse[T]) và cơ chế xử lý ngoại lệ toàn cục."
+    },
+    {
+      "name": "Root",
+      "description": "Endpoint gốc trả về thông tin phiên bản và đường dẫn tài liệu Swagger / ReDoc."
+    }
+  ]
+}
