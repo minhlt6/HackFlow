@@ -46,7 +46,7 @@ erDiagram
         varchar(255) email UK "NOT NULL, INDEX"
         varchar(255) full_name "NOT NULL"
         varchar(255) hashed_password "NULLABLE"
-        varchar(32) role "admin | judge | mentor | candidate"
+        varchar(32) role "admin | mentor | candidate"
         varchar(32) approval_status "pending | approved | rejected"
         text avatar_url "NULLABLE"
         varchar(64) github_id UK "NULLABLE, INDEX"

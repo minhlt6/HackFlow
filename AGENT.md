@@ -195,7 +195,7 @@ Yêu cầu đầu ra:
   ```
 
 ### 4.2 Danh sách Bảng CSDL Cốt Lõi (PostgreSQL)
-1. `users`: Tài khoản, email, họ tên, role (`admin`, `judge`, `candidate`, `mentor`), avatar.
+1. `users`: Tài khoản, email, họ tên, role (`admin`, `candidate`, `mentor`), avatar.
 2. `hackathon_config`: Thời gian bắt đầu/kết thúc, trạng thái công bố đề tài, trạng thái công bố kết quả.
 3. `teams`: Tên đội, mã mời bảo mật (`invite_code`), ID đề tài đã chọn, trạng thái khóa đội.
 4. `team_members`: Quan hệ người dùng và đội thi, vai trò trong đội (`leader`, `member`).

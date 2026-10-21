@@ -30,7 +30,7 @@ topics ──< subtopics ──< topic_mentors >── users (mentor)
 ## NHÓM 1: Người dùng & Xác thực
 
 ### Bảng `users`
-> Lưu thông tin tất cả người dùng của hệ thống (4 role)
+> Lưu thông tin tất cả người dùng của hệ thống (3 role: admin, mentor, participant)
 
 | Cột | Kiểu dữ liệu | Ràng buộc | Mô tả |
 |---|---|---|---|
@@ -39,7 +39,7 @@ topics ──< subtopics ──< topic_mentors >── users (mentor)
 | `github_username` | `VARCHAR(100)` | UNIQUE, NULLABLE | Username GitHub |
 | `email` | `VARCHAR(255)` | UNIQUE, NOT NULL | Email dùng để liên lạc |
 | `password_hash` | `VARCHAR(255)` | NULLABLE | Mật khẩu đã hash (dùng cho mentor/judge/admin — không dùng cho participant) |
-| `role` | `ENUM('participant','mentor','judge','admin')` | NOT NULL | Vai trò trong hệ thống |
+| `role` | `ENUM('participant','mentor','admin')` | NOT NULL | Vai trò trong hệ thống |
 | `full_name` | `VARCHAR(255)` | NOT NULL | Họ và tên đầy đủ |
 | `student_id` | `VARCHAR(20)` | NULLABLE | Mã sinh viên — thí sinh điền khi đăng ký |
 | `date_of_birth` | `DATE` | NULLABLE | Ngày sinh |

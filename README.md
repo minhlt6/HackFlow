@@ -22,11 +22,11 @@
 
 **HackFlow** là hệ thống web tập trung All-in-One giải quyết triệt để vấn đề phân mảnh công cụ (Google Forms, Google Sheets, Zalo/Discord) trong các cuộc thi lập trình học thuật:
 
-* **Quản trị 4 Vai trò độc lập:** Ban tổ chức (Admin Center), Ban giám khảo (Judging Workspace), Thí sinh (Candidate Portal), Mentor (Helpdesk).
+* **Quản trị 3 Vai trò độc lập:** Ban tổ chức (Admin Center), Thí sinh (Candidate Portal), Mentor (Helpdesk).
 * **Kiểm soát Tiến độ bằng Checkpoint:** Time-gated tự động mở/khóa theo giờ Server, thí sinh nộp bài theo từng chặng.
 * **Chống gian lận Commit SHA Freeze:** Tự động gọi GitHub API đóng băng mã Commit hash tại deadline, phát hiện ngay nếu thí sinh push code bổ sung sau thời hạn.
 * **Chọn đề tài Concurrency Control:** Đảm bảo tính nguyên tử (Atomic transaction) khi nhiều đội cùng đăng ký 1 đề tài giới hạn số lượng.
-* **Chấm thi theo Barem Rubric:** Giám khảo chấm điểm tự động theo trọng số tiêu chí, hỗ trợ chế độ Blind Judging (ẩn danh đội thi).
+* **Tiêu chí Barem Rubric & Bảng xếp hạng:** Cấu hình trọng số tiêu chí Rubric và công bố Bảng xếp hạng Leaderboard tự động.
 * **Hỗ trợ qua Kênh Ticket 3 Trạng thái:** Phân luồng câu hỏi theo đề tài của Mentor, tránh trôi tin nhắn và bảo vệ tính công bằng (Mentor không chấm bài đội mình kèm).
 
 ---

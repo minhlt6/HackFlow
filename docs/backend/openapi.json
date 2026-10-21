@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HackFlow Backend API — API Documentation",
-    "description": "# 🚀 HackFlow Backend API — Nền tảng tổ chức & Chấm thi Hackathon\n\nChào mừng bạn đến với tài liệu kỹ thuật API chính thức của dự án **HackFlow9**. Tài liệu này được thiết kế và bàn giao bởi **Lê Tiến Minh (Tech Lead / Core Backend Architect)** phục vụ cho việc tích hợp của Frontend (Trần Thùy Linh), QA/Postman (Đỗ Thị Lan Anh) và nghiệm thu chức năng từ BA (Dương Thị Khánh Ly).\n\n---\n\n## 🏛️ Kiến trúc hệ thống (3-Tier Architecture)\nHệ thống tuân thủ nghiêm ngặt mô hình 3 tầng phân tách độc lập:\n1. **Router (API Layer)**: Tiếp nhận HTTP request, xác thực schema Pydantic, bảo mật JWT Bearer / RBAC, trả về Envelope chuẩn hóa.\n2. **Service (Business Layer)**: Thực thi toàn bộ quy tắc nghiệp vụ Hackathon (ràng buộc 3-5 thành viên/đội, kiểm tra hạn chót, kiểm tra trạng thái phê duyệt).\n3. **Repository (Data Layer)**: Truy xuất cơ sở dữ liệu qua Async SQLAlchemy 2.0 (PostgreSQL / Supabase), hỗ trợ khóa chống tranh chấp `SELECT FOR UPDATE`.\n\n---\n\n## 📦 Chuẩn hóa phản hồi (API Envelope Pattern)\nToàn bộ phản hồi HTTP (cả 2xx thành công lẫn 4xx/5xx lỗi) đều được đóng gói theo định dạng `ApiResponse[T]` thống nhất:\n\n### Thành công (HTTP 200 / 201):\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"message\": \"Thông báo kết quả thao tác thành công\"\n}\n```\n\n### Thất bại (HTTP 400 / 401 / 403 / 404 / 409 / 422 / 500):\n```json\n{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Mô tả chi tiết nguyên nhân lỗi\",\n  \"error_code\": \"TEN_MA_LOI_CHUAN_HOA\"\n}\n```\n\n---\n\n## 🔐 Xác thực & Phân quyền (Authentication & Authorization)\n- **Cơ chế xác thực**: JSON Web Token (JWT) theo chuẩn RFC 7519.\n- **Header gửi kèm**: `Authorization: Bearer <access_token>`\n- **Phương thức đăng nhập**:\n  - Email + Password nội bộ (cho Admin, Judge, Mentor)\n  - GitHub OAuth 2.0 (dành cho Thí sinh - Candidate)\n- **Trạng thái phê duyệt (Approval Status)**:\n  - `pending`: Thí sinh mới đăng ký, chờ BTC phê duyệt.\n  - `approved`: Đã được duyệt hoặc có trong Whitelist, toàn quyền tạo đội & chọn đề tài.\n  - `rejected`: Đơn đăng ký bị từ chối.\n- **Vai trò người dùng (Roles)**:\n  - `admin`: Ban Tổ Chức (toàn quyền quản lý Whitelist, duyệt thí sinh, cấu hình đề tài).\n  - `judge`: Giám khảo chấm thi.\n  - `mentor`: Cố vấn hướng dẫn.\n  - `candidate`: Thí sinh thi đấu (Leader / Member).\n\n---\n\n## ⚠️ Bảng mã lỗi chuẩn hóa (Standard Error Codes)\n| Mã lỗi (`error_code`) | HTTP Status | Ý nghĩa & Hướng xử lý cho Frontend |\n|---|---|---|\n| `UNAUTHORIZED` | 401 | Thiếu token hoặc token đã hết hạn/không hợp lệ. Điều hướng về `/login`. |\n| `FORBIDDEN_ROLE` | 403 | Người dùng không đủ quyền RBAC truy cập chức năng này. |\n| `ACCOUNT_NOT_APPROVED` | 403 | Tài khoản chưa được BTC phê duyệt (`approval_status != 'approved'`). |\n| `ALREADY_IN_TEAM` | 400 | Thí sinh đã tham gia một đội thi khác, không thể tạo hoặc tham gia thêm. |\n| `TEAM_FULL` | 400 | Đội thi đã đạt số lượng tối đa 5 thành viên. |\n| `TEAM_NAME_TAKEN` | 400 | Tên đội thi đã được đăng ký trước đó. |\n| `NOT_IN_TEAM` | 400 | Thao tác yêu cầu người dùng phải thuộc một đội thi. |\n| `ONLY_LEADER_CAN_PERFORM`| 403 | Thao tác (như chọn hoặc hủy đề tài) chỉ dành riêng cho Đội trưởng. |\n| `TEAM_NOT_QUALIFIED` | 400 | Đội thi chưa đủ điều kiện (chưa đạt tối thiểu 3 thành viên để đăng ký đề tài). |\n| `TOPIC_FULL` | 409 | Đề tài đã đạt giới hạn quota số đội đăng ký tối đa. |\n| `TOPIC_SELECTION_CLOSED` | 400 | Thời gian đăng ký đề tài đã kết thúc hoặc đề tài tạm khóa. |\n| `TOPIC_ALREADY_SELECTED` | 400 | Đội thi đã chọn một đề tài trước đó (cần hủy đề tài cũ trước). |\n| `CHECKPOINT_NOT_OPEN` | 403 | Cổng nộp bài cho checkpoint này chưa đến giờ mở (`now < start_time`). |\n| `CHECKPOINT_INACTIVE` | 403 | Checkpoint này đang tạm khóa hoặc đã bị vô hiệu hóa bởi Ban tổ chức (`is_active=False`). |\n| `DEADLINE_EXCEEDED` | 403/400 | Đã quá hạn chót cho phép thao tác (chọn đề tài hoặc nộp bài sau Deadline + Grace Period 5s). |\n| `GITHUB_REPO_INACCESSIBLE`| 400 | Repo GitHub nộp bài không công khai hoặc không truy cập được. |\n| `NOT_FOUND` | 404 | Không tìm thấy bản ghi/tài nguyên yêu cầu. |\n| `VALIDATION_ERROR` | 422 | Dữ liệu gửi lên sai kiểu dữ liệu hoặc vi phạm validation rules. |\n\n---\n\n## 🗺️ Lộ trình triển khai API (Implementation Status)\n- ✅ **Sprint 1 (Hoàn tất)**:\n  - `HF-17`: Khởi tạo kiến trúc 3 tầng & chuẩn hóa ApiResponse Envelope.\n  - `HF-19`: Xác thực JWT, GitHub OAuth 2.0 Callback, RBAC, Admin Whitelist & Candidate Approval.\n  - `HF-20`: Quản lý Đội thi (Create, Join by 6-char code, Me, Team Detail, giới hạn 3-5 thành viên).\n  - `HF-21`: Quản lý Đề tài thi (List Topics, Quota, Atomic Select `SELECT FOR UPDATE`, Cancel Topic).\n  - `HF-22`: Xuất Swagger Docs & Tài liệu Bàn giao API Contract.\n- 🚀 **Sprint 2 (Đang triển khai)**:\n  - `HF-32`: Lập trình API Checkpoint Time-gated (Mở/Khóa cổng nộp bài, ân hạn mạng 5s) — **Hoàn tất**.\n  - `HF-33`: Lập trình module tích hợp GitHub API xác thực HEAD Commit SHA.\n  - `HF-34`: Lập trình API POST /submissions (Lưu trữ bài nộp) và Audit Log.\n- ⏳ **Sprint 3 (Roadmap sắp tới)**:\n  - Evaluation & Scoring Matrix API (Chấm điểm Rubric cho Giám khảo, xếp hạng tự động).\n",
+    "description": "# 🚀 HackFlow Backend API — Nền tảng tổ chức & Chấm thi Hackathon\n\nChào mừng bạn đến với tài liệu kỹ thuật API chính thức của dự án **HackFlow9**. Tài liệu này được thiết kế và bàn giao bởi **Lê Tiến Minh (Tech Lead / Core Backend Architect)** phục vụ cho việc tích hợp của Frontend (Trần Thùy Linh), QA/Postman (Đỗ Thị Lan Anh) và nghiệm thu chức năng từ BA (Dương Thị Khánh Ly).\n\n---\n\n## 🏛️ Kiến trúc hệ thống (3-Tier Architecture)\nHệ thống tuân thủ nghiêm ngặt mô hình 3 tầng phân tách độc lập:\n1. **Router (API Layer)**: Tiếp nhận HTTP request, xác thực schema Pydantic, bảo mật JWT Bearer / RBAC, trả về Envelope chuẩn hóa.\n2. **Service (Business Layer)**: Thực thi toàn bộ quy tắc nghiệp vụ Hackathon (ràng buộc 3-5 thành viên/đội, kiểm tra hạn chót, kiểm tra trạng thái phê duyệt).\n3. **Repository (Data Layer)**: Truy xuất cơ sở dữ liệu qua Async SQLAlchemy 2.0 (PostgreSQL / Supabase), hỗ trợ khóa chống tranh chấp `SELECT FOR UPDATE`.\n\n---\n\n## 📦 Chuẩn hóa phản hồi (API Envelope Pattern)\nToàn bộ phản hồi HTTP (cả 2xx thành công lẫn 4xx/5xx lỗi) đều được đóng gói theo định dạng `ApiResponse[T]` thống nhất:\n\n### Thành công (HTTP 200 / 201):\n```json\n{\n  \"success\": true,\n  \"data\": { ... },\n  \"message\": \"Thông báo kết quả thao tác thành công\"\n}\n```\n\n### Thất bại (HTTP 400 / 401 / 403 / 404 / 409 / 422 / 500):\n```json\n{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Mô tả chi tiết nguyên nhân lỗi\",\n  \"error_code\": \"TEN_MA_LOI_CHUAN_HOA\"\n}\n```\n\n---\n\n## 🔐 Xác thực & Phân quyền (Authentication & Authorization)\n- **Cơ chế xác thực**: JSON Web Token (JWT) theo chuẩn RFC 7519.\n- **Header gửi kèm**: `Authorization: Bearer <access_token>`\n- **Phương thức đăng nhập**:\n  - Email + Password nội bộ (cho Admin, Mentor)\n  - GitHub OAuth 2.0 (dành cho Thí sinh - Candidate)\n- **Trạng thái phê duyệt (Approval Status)**:\n  - `pending`: Thí sinh mới đăng ký, chờ BTC phê duyệt.\n  - `approved`: Đã được duyệt hoặc có trong Whitelist, toàn quyền tạo đội & chọn đề tài.\n  - `rejected`: Đơn đăng ký bị từ chối.\n- **Vai trò người dùng (Roles)**:\n  - `admin`: Ban Tổ Chức (toàn quyền quản lý Whitelist, duyệt thí sinh, cấu hình đề tài, tiêu chí và bảng xếp hạng).\n  - `mentor`: Cố vấn hướng dẫn.\n  - `candidate`: Thí sinh thi đấu (Leader / Member).\n\n---\n\n## ⚠️ Bảng mã lỗi chuẩn hóa (Standard Error Codes)\n| Mã lỗi (`error_code`) | HTTP Status | Ý nghĩa & Hướng xử lý cho Frontend |\n|---|---|---|\n| `UNAUTHORIZED` | 401 | Thiếu token hoặc token đã hết hạn/không hợp lệ. Điều hướng về `/login`. |\n| `FORBIDDEN_ROLE` | 403 | Người dùng không đủ quyền RBAC truy cập chức năng này. |\n| `ACCOUNT_NOT_APPROVED` | 403 | Tài khoản chưa được BTC phê duyệt (`approval_status != 'approved'`). |\n| `ALREADY_IN_TEAM` | 400 | Thí sinh đã tham gia một đội thi khác, không thể tạo hoặc tham gia thêm. |\n| `TEAM_FULL` | 400 | Đội thi đã đạt số lượng tối đa 5 thành viên. |\n| `TEAM_NAME_TAKEN` | 400 | Tên đội thi đã được đăng ký trước đó. |\n| `NOT_IN_TEAM` | 400 | Thao tác yêu cầu người dùng phải thuộc một đội thi. |\n| `ONLY_LEADER_CAN_PERFORM`| 403 | Thao tác (như chọn hoặc hủy đề tài) chỉ dành riêng cho Đội trưởng. |\n| `TEAM_NOT_QUALIFIED` | 400 | Đội thi chưa đủ điều kiện (chưa đạt tối thiểu 3 thành viên để đăng ký đề tài). |\n| `TOPIC_FULL` | 409 | Đề tài đã đạt giới hạn quota số đội đăng ký tối đa. |\n| `TOPIC_SELECTION_CLOSED` | 400 | Thời gian đăng ký đề tài đã kết thúc hoặc đề tài tạm khóa. |\n| `TOPIC_ALREADY_SELECTED` | 400 | Đội thi đã chọn một đề tài trước đó (cần hủy đề tài cũ trước). |\n| `CHECKPOINT_NOT_OPEN` | 403 | Cổng nộp bài cho checkpoint này chưa đến giờ mở (`now < start_time`). |\n| `CHECKPOINT_INACTIVE` | 403 | Checkpoint này đang tạm khóa hoặc đã bị vô hiệu hóa bởi Ban tổ chức (`is_active=False`). |\n| `DEADLINE_EXCEEDED` | 403/400 | Đã quá hạn chót cho phép thao tác (chọn đề tài hoặc nộp bài sau Deadline + Grace Period 5s). |\n| `GITHUB_REPO_INACCESSIBLE`| 400 | Repo GitHub nộp bài không công khai hoặc không truy cập được. |\n| `NOT_FOUND` | 404 | Không tìm thấy bản ghi/tài nguyên yêu cầu. |\n| `VALIDATION_ERROR` | 422 | Dữ liệu gửi lên sai kiểu dữ liệu hoặc vi phạm validation rules. |\n\n---\n\n## 🗺️ Lộ trình triển khai API (Implementation Status)\n- ✅ **Sprint 1 (Hoàn tất)**:\n  - `HF-17`: Khởi tạo kiến trúc 3 tầng & chuẩn hóa ApiResponse Envelope.\n  - `HF-19`: Xác thực JWT, GitHub OAuth 2.0 Callback, RBAC, Admin Whitelist & Candidate Approval.\n  - `HF-20`: Quản lý Đội thi (Create, Join by 6-char code, Me, Team Detail, giới hạn 3-5 thành viên).\n  - `HF-21`: Quản lý Đề tài thi (List Topics, Quota, Atomic Select `SELECT FOR UPDATE`, Cancel Topic).\n  - `HF-22`: Xuất Swagger Docs & Tài liệu Bàn giao API Contract.\n- 🚀 **Sprint 2 (Đang triển khai)**:\n  - `HF-32`: Lập trình API Checkpoint Time-gated (Mở/Khóa cổng nộp bài, ân hạn mạng 5s) — **Hoàn tất**.\n  - `HF-33`: Lập trình module tích hợp GitHub API xác thực HEAD Commit SHA.\n  - `HF-34`: Lập trình API POST /submissions (Lưu trữ bài nộp) và Audit Log.\n- ⏳ **Sprint 3 (Roadmap sắp tới)**:\n  - Evaluation & Scoring Matrix API (Chấm điểm Rubric cho Giám khảo, xếp hạng tự động).\n",
     "contact": {
       "name": "Lê Tiến Minh (Tech Lead / Core Backend Architect)",
       "url": "https://github.com/minhlt6/HackFlow9",
@@ -156,7 +156,7 @@
         "tags": [
           "Auth (HF-19)"
         ],
-        "summary": "Đăng nhập tài khoản nội bộ (Admin/Judge/Mentor)",
+        "summary": "Đăng nhập tài khoản nội bộ (Admin/Mentor)",
         "description": "Xác thực bằng Email và Mật khẩu, trả về Bearer JWT Token và thông tin User.",
         "operationId": "login_api_v1_auth_login_post",
         "requestBody": {
@@ -2152,6 +2152,320 @@
         }
       }
     },
+    "/api/v1/tickets": {
+      "post": {
+        "tags": [
+          "Support Tickets (HF-37)"
+        ],
+        "summary": "Tạo ticket hỗ trợ kỹ thuật mới (Candidate)",
+        "description": "Thí sinh (Candidate) đã được phê duyệt tạo yêu cầu hỗ trợ kỹ thuật.\nHệ thống tự động gắn team_id nếu thí sinh đã thuộc một đội thi.",
+        "operationId": "create_ticket_api_v1_tickets_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TicketResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Support Tickets (HF-37)"
+        ],
+        "summary": "Lọc danh sách toàn bộ ticket hỗ trợ (Mentor/Admin)",
+        "description": "Mentor và Admin xem và lọc danh sách toàn bộ ticket hỗ trợ.",
+        "operationId": "list_all_tickets_api_v1_tickets_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TicketStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo trạng thái ticket",
+              "title": "Status"
+            },
+            "description": "Lọc theo trạng thái ticket"
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TicketPriority"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo mức độ ưu tiên",
+              "title": "Priority"
+            },
+            "description": "Lọc theo mức độ ưu tiên"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo phân loại hỗ trợ",
+              "title": "Category"
+            },
+            "description": "Lọc theo phân loại hỗ trợ"
+          },
+          {
+            "name": "assigned_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lọc theo ID người được phân công",
+              "title": "Assigned To"
+            },
+            "description": "Lọc theo ID người được phân công"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Số bản ghi bỏ qua",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Số bản ghi bỏ qua"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Số bản ghi tối đa trả về",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Số bản ghi tối đa trả về"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_TicketResponse__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/me": {
+      "get": {
+        "tags": [
+          "Support Tickets (HF-37)"
+        ],
+        "summary": "Xem danh sách ticket của cá nhân / đội thi (Candidate)",
+        "description": "Lấy danh sách các ticket do thí sinh tạo hoặc thuộc đội thi của thí sinh.",
+        "operationId": "get_my_tickets_api_v1_tickets_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_List_TicketResponse__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tickets/{ticket_id}": {
+      "get": {
+        "tags": [
+          "Support Tickets (HF-37)"
+        ],
+        "summary": "Xem chi tiết một ticket hỗ trợ (Candidate/Mentor/Admin)",
+        "description": "Xem chi tiết một ticket hỗ trợ (Judge bị chặn 403 FORBIDDEN_ROLE, Candidate chỉ xem được ticket của mình/đội mình).",
+        "operationId": "get_ticket_detail_api_v1_tickets__ticket_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TicketResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Support Tickets (HF-37)"
+        ],
+        "summary": "Cập nhật / phản hồi ticket hỗ trợ (Mentor/Admin hoặc Candidate close/reopen)",
+        "description": "Mentor hoặc Admin cập nhật trạng thái, phân công, hoặc nhập nội dung phản hồi ticket.\n- Hỗ trợ cả truyền trực tiếp `status` (HF-40) lẫn truyền `action` (`accept`, `resolve`, `update_response`, `close`, `reopen`, `escalate` theo SRS HF-37 / Frontend HF-47).\n- Chuyển sang 'in_progress' và chưa có người xử lý -> Tự động gán cho Mentor/Admin hiện tại.\n- Chuyển sang 'resolved' -> Bắt buộc phải có nội dung phản hồi (response).",
+        "operationId": "update_ticket_api_v1_tickets__ticket_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TicketResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/rubrics": {
       "get": {
         "tags": [
@@ -2195,244 +2509,6 @@
         },
         "responses": {
           "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/evaluations/submissions": {
-      "get": {
-        "tags": [
-          "Evaluations & Blind Judging (HF-42)"
-        ],
-        "summary": "List Final Checkpoint submissions in Blind Judging mode (HF-42)",
-        "operationId": "list_blind_submissions_api_v1_evaluations_submissions_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/evaluations/submissions/{submission_id}": {
-      "get": {
-        "tags": [
-          "Evaluations & Blind Judging (HF-42)"
-        ],
-        "summary": "Get a single Final Checkpoint submission in Blind Judging mode (HF-42)",
-        "operationId": "get_blind_submission_detail_api_v1_evaluations_submissions__submission_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "submission_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Submission Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/evaluations": {
-      "post": {
-        "tags": [
-          "Evaluations & Blind Judging (HF-42)"
-        ],
-        "summary": "Save draft or submit locked evaluation scores (HF-42)",
-        "operationId": "submit_or_save_evaluation_api_v1_evaluations_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EvaluationSubmitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/evaluations/{submission_id}/judges/{judge_id}/unlock": {
-      "patch": {
-        "tags": [
-          "Evaluations & Blind Judging (HF-42)"
-        ],
-        "summary": "Admin unlocks a locked evaluation for re-assessment (HF-42 / AC-18.3)",
-        "operationId": "unlock_evaluation_api_v1_admin_evaluations__submission_id__judges__judge_id__unlock_patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "submission_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Submission Id"
-            }
-          },
-          {
-            "name": "judge_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Judge Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/AdminUnlockEvaluationRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_Dict_str__Any__"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/evaluations/assignments": {
-      "post": {
-        "tags": [
-          "Evaluations & Blind Judging (HF-42)"
-        ],
-        "summary": "Admin assigns a judge to specific submissions or teams (US-14 / HF-42)",
-        "operationId": "assign_judge_api_v1_admin_evaluations_assignments_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JudgeAssignmentCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -2561,25 +2637,6 @@
   },
   "components": {
     "schemas": {
-      "AdminUnlockEvaluationRequest": {
-        "properties": {
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason",
-            "default": "Admin unlocked evaluation for re-assessment"
-          }
-        },
-        "type": "object",
-        "title": "AdminUnlockEvaluationRequest",
-        "description": "Optional request body for PATCH /api/v1/admin/evaluations/{submission_id}/judges/{judge_id}/unlock."
-      },
       "AnnouncementCreate": {
         "properties": {
           "title": {
@@ -3283,6 +3340,54 @@
         "type": "object",
         "title": "ApiResponse[List[SubmissionResponse]]"
       },
+      "ApiResponse_List_TicketResponse__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[List[TicketResponse]]"
+      },
       "ApiResponse_List_TopicResponse__": {
         "properties": {
           "success": {
@@ -3510,6 +3615,50 @@
         },
         "type": "object",
         "title": "ApiResponse[TeamResponse]"
+      },
+      "ApiResponse_TicketResponse_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "default": "Success"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TicketResponse]"
       },
       "ApiResponse_TokenResponse_": {
         "properties": {
@@ -4702,90 +4851,6 @@
         ],
         "title": "DemoPayload"
       },
-      "EvaluationCriterionScoreInput": {
-        "properties": {
-          "criteria_id": {
-            "type": "string",
-            "title": "Criteria Id"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "comment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comment"
-          }
-        },
-        "type": "object",
-        "required": [
-          "criteria_id"
-        ],
-        "title": "EvaluationCriterionScoreInput",
-        "description": "Input score and commentary for a single rubric criterion."
-      },
-      "EvaluationSubmitRequest": {
-        "properties": {
-          "submission_id": {
-            "type": "string",
-            "title": "Submission Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status",
-            "default": "draft"
-          },
-          "evaluations": {
-            "items": {
-              "$ref": "#/components/schemas/EvaluationCriterionScoreInput"
-            },
-            "type": "array",
-            "title": "Evaluations"
-          },
-          "general_comment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "General Comment"
-          },
-          "team_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Team Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "submission_id"
-        ],
-        "title": "EvaluationSubmitRequest",
-        "description": "Request schema for POST /api/v1/evaluations (Judge)."
-      },
       "GitHubOAuthCallbackRequest": {
         "properties": {
           "code": {
@@ -4892,56 +4957,6 @@
           "database"
         ],
         "title": "HealthCheckData"
-      },
-      "JudgeAssignmentCreateRequest": {
-        "properties": {
-          "judge_id": {
-            "type": "string",
-            "title": "Judge Id"
-          },
-          "submission_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submission Id"
-          },
-          "submission_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submission Ids"
-          },
-          "team_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Team Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "judge_id"
-        ],
-        "title": "JudgeAssignmentCreateRequest",
-        "description": "Request body for assigning a judge to one or more submissions/teams."
       },
       "LoginRequest": {
         "properties": {
@@ -5119,7 +5134,7 @@
               }
             ],
             "title": "Role",
-            "description": "Vai trò: candidate, judge, mentor, admin",
+            "description": "Vai trò: candidate, mentor, admin",
             "default": "candidate"
           }
         },
@@ -5809,6 +5824,250 @@
           "member_count"
         ],
         "title": "TeamResponse"
+      },
+      "TicketCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 5,
+            "title": "Title",
+            "description": "Tiêu đề yêu cầu hỗ trợ"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 10,
+            "title": "Content",
+            "description": "Nội dung chi tiết yêu cầu hỗ trợ"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category",
+            "description": "Phân loại hỗ trợ kỹ thuật",
+            "default": "technical"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TicketPriority",
+            "description": "Mức độ ưu tiên: low | normal | high | urgent",
+            "default": "normal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "TicketCreate",
+        "description": "Schema for creating a new support ticket (POST /tickets)."
+      },
+      "TicketPriority": {
+        "type": "string",
+        "enum": [
+          "low",
+          "normal",
+          "high",
+          "urgent"
+        ],
+        "title": "TicketPriority"
+      },
+      "TicketResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "assigned_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TicketPriority"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "title",
+          "content",
+          "priority",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TicketResponse",
+        "description": "Schema for returning support ticket information."
+      },
+      "TicketStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "in_progress",
+          "resolved",
+          "closed"
+        ],
+        "title": "TicketStatus"
+      },
+      "TicketUpdate": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action",
+            "description": "Hành động theo SRS HF-37: accept | update_response | resolve | close | reopen | escalate"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trạng thái xử lý: open | in_progress | resolved | closed"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response",
+            "description": "Nội dung phản hồi từ Mentor hoặc BTC/Admin"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Ghi chú chuyển giao (escalate) lên Admin"
+          },
+          "target_admin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Admin Id",
+            "description": "ID Admin nhận chuyển giao trực tiếp"
+          },
+          "assigned_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To",
+            "description": "ID người xử lý được phân công (Mentor/Admin)"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketPriority"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mức độ ưu tiên"
+          }
+        },
+        "type": "object",
+        "title": "TicketUpdate",
+        "description": "Schema for updating a support ticket (PATCH /tickets/{id})."
       },
       "TokenResponse": {
         "properties": {

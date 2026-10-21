@@ -9,11 +9,10 @@
 
 ## 1. Tổng quan Kiến trúc (Executive Overview)
 
-**HackFlow9** được thiết kế theo kiến trúc **Client–Server phân tách độc lập (Decoupled Full-Stack Architecture)** kết hợp mô hình **3 tầng (3-Tier Layered Architecture)** ở phía Backend và **Reactive Dual-Store SPA** ở phía Frontend. Hệ thống giải quyết trọn vẹn vòng đời một kỳ thi Hackathon học thuật qua **4 cổng vai trò (Role Portals)**:
+**HackFlow9** được thiết kế theo kiến trúc **Client–Server phân tách độc lập (Decoupled Full-Stack Architecture)** kết hợp mô hình **3 tầng (3-Tier Layered Architecture)** ở phía Backend và **Reactive Dual-Store SPA** ở phía Frontend. Hệ thống giải quyết trọn vẹn vòng đời một kỳ thi Hackathon học thuật qua **3 cổng vai trò (Role Portals)**:
 1. **Candidate Portal (`candidate`)**: Đăng ký/Onboarding hồ sơ & kỹ năng, ghép đội bằng mã mời 6 ký tự, chuyển quyền Đội trưởng, đăng ký đề tài giới hạn quota, nộp bài theo Checkpoint Time-gated (đóng băng GitHub Commit SHA), gửi Ticket hỏi Mentor và theo dõi Bảng xếp hạng.
-2. **Admin Center (`admin`)**: Quản trị cấu hình cuộc thi, quản lý danh sách Whitelist email, xét duyệt hồ sơ thí sinh (`pending` → `approved`/`rejected`), quản lý đề tài/quota, cấu hình mốc thời gian Checkpoint, thiết lập Barem tiêu chí chấm (`RubricCriteria`), phân công Mentor/Giám khảo và công bố kết quả.
-3. **Judging Workspace (`judge`)**: Giao diện chấm điểm chia đôi màn hình (Split-Screen) đối chiếu bài nộp/mã Commit SHA với thanh trượt chấm điểm theo trọng số Rubric, hỗ trợ chế độ ẩn danh đội thi (Blind Judging).
-4. **Mentor Helpdesk (`mentor`)**: Tiếp nhận, phân loại và phản hồi Ticket hỗ trợ của các đội thi theo quy trình 3 trạng thái (`open` → `in_progress` → `resolved`), theo dõi tiến độ các đội được phân công.
+2. **Admin Center (`admin`)**: Quản trị cấu hình cuộc thi, quản lý danh sách Whitelist email, xét duyệt hồ sơ thí sinh (`pending` → `approved`/`rejected`), quản lý đề tài/quota, cấu hình mốc thời gian Checkpoint, thiết lập Barem tiêu chí chấm (`RubricCriteria`), phân công Mentor và công bố kết quả.
+3. **Mentor Helpdesk (`mentor`)**: Tiếp nhận, phân loại và phản hồi Ticket hỗ trợ của các đội thi theo quy trình 3 trạng thái (`open` → `in_progress` → `resolved`), theo dõi tiến độ các đội được phân công.
 
 ---
 
@@ -23,7 +22,7 @@
 flowchart TB
     subgraph ClientLayer["🖥️ TẦNG GIAO DIỆN — FRONTEND SPA (React 19 + TypeScript + Vite 8)"]
         Router["React Router v7 (createBrowserRouter)\nProtectedRoute + RBAC + Approval Gate"]
-        Portals["4 Role Portals\n• Candidate Portal\n• Admin Center\n• Judging Workspace\n• Mentor Helpdesk"]
+        Portals["3 Role Portals\n• Candidate Portal\n• Admin Center\n• Mentor Helpdesk"]
         State["Quản lý Trạng thái (Zustand + LocalStorage)\n• useAuthStore (JWT & User Profile)\n• useMockStore (Cross-Role State & DoD Switcher)\n• realtimeSync (BroadcastChannel Đa Tab)"]
         APIClient["Axios Client (axiosClient.ts)\n• Request Interceptor (Bearer JWT)\n• Response Interceptor (401 Handler & Offline Fallback)"]
         Router --> Portals --> State --> APIClient
@@ -91,7 +90,7 @@ backend/
    - Thực thi kiểm tra xác thực & phân quyền qua hệ thống Dependency Injection trong [`app/api/deps.py`](../../backend/app/api/deps.py):
      - `get_current_user`: Giải mã Bearer JWT Token, truy vấn `User` từ DB và kiểm tra `is_active`.
      - `require_approved`: Chặn thí sinh có `approval_status != 'approved'` thực hiện các tác vụ thi đấu (trả về mã lỗi `ACCOUNT_NOT_APPROVED` - HTTP 403).
-     - `require_role(*allowed_roles)`: Kiểm soát truy cập theo vai trò RBAC (`admin`, `judge`, `mentor`, `candidate`).
+     - `require_role(*allowed_roles)`: Kiểm soát truy cập theo vai trò RBAC (`admin`, `mentor`, `candidate`).
    - Đóng gói kết quả trả về theo định dạng chuẩn `ApiResponse[T]`.
 2. **Tầng 2 — Business Logic / Service Layer (`app/services/`)**:
    - Chứa toàn bộ luật nghiệp vụ cốt lõi của cuộc thi Hackathon, hoàn toàn độc lập với giao thức HTTP.
@@ -196,7 +195,6 @@ frontend/src/
 │   ├── DashboardPage.tsx                # Bảng điều khiển tổng quan của Thí sinh
 │   ├── candidate/                       # Đề tài, Checkpoint, Nộp bài Chung kết, Bảng xếp hạng, Ticket
 │   ├── admin/                           # 11 trang quản trị dành cho Ban Tổ Chức (Admin Center)
-│   ├── judge/                           # 4 trang chấm thi (Dashboard, Split-Screen Rubric, Đề tài, Kết quả)
 │   └── mentor/                          # 4 trang cố vấn (Dashboard, Xử lý Ticket, Đội phụ trách, Tiến độ)
 ├── store/
 │   ├── useAuthStore.ts                  # Lưu trữ phiên đăng nhập (User + JWT Token) đồng bộ localStorage

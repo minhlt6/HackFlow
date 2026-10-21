@@ -73,7 +73,7 @@ Toàn bộ các API trong hệ thống đều tuân thủ 100% chuẩn phản h�
   ```
 - **Vai trò người dùng (`role`):**
   - `admin`: Ban Tổ Chức (BTC) — Có quyền quản lý Whitelist, duyệt ứng viên, cấu hình đề tài.
-  - `judge`: Ban Giám Khảo — Chấm điểm bài thi.
+
   - `mentor`: Cố vấn — Xem tiến độ và hỗ trợ kỹ thuật cho đội thi.
   - `candidate`: Thí sinh tham gia thi đấu (chia thành Leader hoặc Member trong đội).
 - **Trạng thái phê duyệt (`approval_status`):**
@@ -89,7 +89,7 @@ Toàn bộ các API trong hệ thống đều tuân thủ 100% chuẩn phản h�
 |---|---|---|---|---|
 | **Health** | `GET` | `/api/v1/health` | Không | Kiểm tra trạng thái server & kết nối Database Supabase |
 | **Root** | `GET` | `/` | Không | Thông tin phiên bản & link Swagger |
-| **Auth** | `POST` | `/api/v1/auth/login` | Không | Đăng nhập tài khoản nội bộ (Admin/Judge/Mentor) |
+| **Auth** | `POST` | `/api/v1/auth/login` | Không | Đăng nhập tài khoản nội bộ (Admin/Mentor/Candidate) |
 | **Auth** | `POST` | `/api/v1/auth/register` | Không | Đăng ký tài khoản nội bộ mới (mặc định pending) |
 | **Auth** | `GET` | `/api/v1/auth/github` | Không | Lấy URL ủy quyền đăng nhập GitHub OAuth 2.0 |
 | **Auth** | `POST` | `/api/v1/auth/github/callback` | Không | Xử lý code đổi lấy GitHub profile & JWT token |
