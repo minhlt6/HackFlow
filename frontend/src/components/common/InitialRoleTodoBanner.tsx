@@ -13,7 +13,6 @@ import {
   Scale,
   Users,
   Lightbulb,
-  BookOpen,
   UserCheck,
   FileCheck,
   HelpCircle,
@@ -23,7 +22,7 @@ import { Badge } from '../Badge';
 import { Button } from '../ui/button';
 
 interface InitialRoleTodoBannerProps {
-  role: 'candidate' | 'admin' | 'judge' | 'mentor';
+  role: 'candidate' | 'admin' | 'mentor';
 }
 
 export const InitialRoleTodoBanner: React.FC<InitialRoleTodoBannerProps> = ({ role }) => {
@@ -93,7 +92,7 @@ export const InitialRoleTodoBanner: React.FC<InitialRoleTodoBannerProps> = ({ ro
         id: 'cand-pledge',
         stepNum: 3,
         title: 'Bước 3: Quy chế & Ký cam kết liêm chính',
-        description: 'Đọc thể lệ cuộc thi, cam kết bản quyền mã nguồn và chấp thuận chấm ẩn danh.',
+        description: 'Đọc thể lệ cuộc thi và cam kết bản quyền mã nguồn của đội thi.',
         isCompleted: isStep3Done,
         actionLabel: isStep3Done ? 'Đã ký cam kết' : 'Ký cam kết ngay',
         icon: <FileCheck size={15} className="text-emerald-600 dark:text-emerald-400" />,
@@ -130,48 +129,11 @@ export const InitialRoleTodoBanner: React.FC<InitialRoleTodoBannerProps> = ({ ro
       {
         id: 'adm-security',
         stepNum: 3,
-        title: 'Bước 3: Thiết lập Chính sách Bảo mật & Chấm ẩn danh',
-        description: 'Kích hoạt chế độ mã hóa danh tính thí sinh khi Ban Giám khảo chấm thi.',
+        title: 'Bước 3: Thiết lập Chính sách Bảo mật & Whitelist',
+        description: 'Đối soát danh sách email Whitelist hợp lệ của sinh viên tham gia.',
         isCompleted: true,
         actionLabel: 'Kiểm tra bảo mật',
         icon: <ShieldCheck size={15} className="text-primary" />,
-      },
-    ];
-  } else if (role === 'judge') {
-    title = 'Hướng dẫn Nghiệp vụ Ban Giám khảo';
-    roleBadge = 'Dành cho Hội đồng Giám khảo';
-    roleIcon = <Scale size={18} className="text-emerald-600 dark:text-emerald-400" />;
-    subtitle = 'Chuẩn bị quy trình đánh giá công tâm, chính xác theo khung tiêu chí Rubric';
-
-    const isJudgePledged = Boolean(pledgedUsers[currentUser.id]);
-
-    items = [
-      {
-        id: 'jdg-credentials',
-        stepNum: 1,
-        title: 'Bước 1: Xác nhận hồ sơ chuyên gia & Đơn vị công tác',
-        description: 'Kiểm tra thông tin học hàm, học vị và đơn vị công tác của chuyên gia.',
-        isCompleted: true,
-        actionLabel: 'Xem hồ sơ',
-        icon: <GraduationCap size={15} className="text-sky-600 dark:text-sky-400" />,
-      },
-      {
-        id: 'jdg-nda',
-        stepNum: 2,
-        title: 'Bước 2: Ký cam kết liêm chính & Tránh xung đột lợi ích',
-        description: 'Bảo mật ý tưởng dự án và cam kết từ chối chấm đội có học viên quen biết.',
-        isCompleted: isJudgePledged,
-        actionLabel: isJudgePledged ? 'Đã ký cam kết' : 'Ký cam kết ngay',
-        icon: <FileCheck size={15} className="text-emerald-600 dark:text-emerald-400" />,
-      },
-      {
-        id: 'jdg-rubric',
-        stepNum: 3,
-        title: 'Bước 3: Nắm vững Rubric & Giao diện chấm 2 màn hình',
-        description: 'Làm quen màn hình đối chiếu mã nguồn GitHub, video demo và bảng điểm.',
-        isCompleted: true,
-        actionLabel: 'Xem hướng dẫn',
-        icon: <BookOpen size={15} className="text-primary" />,
       },
     ];
   } else if (role === 'mentor') {

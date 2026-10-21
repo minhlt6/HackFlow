@@ -29,13 +29,13 @@ interface AuthResponse {
   data?: AuthResponse;
 }
 
-const roles: UserRole[] = ['admin', 'judge', 'mentor', 'candidate'];
+const roles: UserRole[] = ['admin', 'mentor', 'candidate'];
 const statuses: ApprovalStatus[] = ['pending', 'approved', 'rejected'];
 
 const IDENTIFIER_ALIASES: Record<string, string> = {
   admin: 'admin@hackflow.dev',
   'admin@hackflow.io': 'admin@hackflow.dev',
-  judge: 'judge.tech@hackathon.org',
+
   mentor: 'mentor.ai@ailab.org.vn',
   leader: 'leader@cybersamurai.team',
   candidate: 'leader@cybersamurai.team',
@@ -76,7 +76,7 @@ const redirectForUser = (user: User): string => {
   if (user.role === 'candidate' && user.approvalStatus === 'rejected') return '/rejected';
   return {
     admin: '/admin/dashboard',
-    judge: '/judge/dashboard',
+
     mentor: '/mentor/dashboard',
     candidate: '/dashboard',
   }[user.role];
@@ -94,7 +94,7 @@ const LOCAL_DEV_DEMO_USERS: Record<string, User> = {
     id: 'usr-judge-01',
     email: 'judge.tech@hackathon.org',
     fullName: 'TS. Nguyễn Hoàng Giám Khảo',
-    role: 'judge',
+    role: 'mentor',
     approvalStatus: 'approved',
   },
   'mentor.ai@ailab.org.vn': {
@@ -138,9 +138,9 @@ const LOCAL_DEV_DEMO_USERS: Record<string, User> = {
 
 const syncMockStoreWithUser = (user: User) => {
   const mockStore = useMockStore.getState();
-  let targetPersona: 'admin' | 'judge' | 'mentor' | 'leader' | 'member' | 'pending' | 'rejected';
+  let targetPersona: 'admin' | 'mentor' | 'leader' | 'member' | 'pending' | 'rejected';
   if (user.role === 'admin') targetPersona = 'admin';
-  else if (user.role === 'judge') targetPersona = 'judge';
+
   else if (user.role === 'mentor') targetPersona = 'mentor';
   else if (user.approvalStatus === 'pending') targetPersona = 'pending';
   else if (user.approvalStatus === 'rejected') targetPersona = 'rejected';
@@ -327,7 +327,7 @@ export const LoginPage: React.FC = () => {
                   Cổng đăng nhập hệ thống
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  Dành cho Thí sinh, Cố vấn, Giám khảo và Ban Quản Trị
+                  Dành cho Thí sinh, Cố vấn và Ban Quản Trị
                 </p>
               </div>
 

@@ -63,9 +63,9 @@ export const normalizeScoreTo100 = (
 interface MockStoreState {
   // Current user & authentication
   currentUser: User;
-  activeRolePersona: 'admin' | 'leader' | 'member' | 'pending' | 'rejected' | 'mentor' | 'judge';
+  activeRolePersona: 'admin' | 'leader' | 'member' | 'pending' | 'rejected' | 'mentor';
   isAuthenticated: boolean;
-  switchPersona: (persona: 'admin' | 'leader' | 'member' | 'pending' | 'rejected' | 'mentor' | 'judge') => void;
+  switchPersona: (persona: 'admin' | 'leader' | 'member' | 'pending' | 'rejected' | 'mentor') => void;
   logout: () => void;
   updateCurrentUserProfile: (profile: Partial<User>) => void;
 
@@ -163,7 +163,7 @@ interface MockStoreState {
   // Announcements
   announcements: Announcement[];
   addAnnouncement: (title: string, content: string, isPinned?: boolean) => void;
-  broadcastAnnouncement: (title: string, content: string, targetRole?: 'all' | 'candidates' | 'judges' | 'mentors') => void;
+  broadcastAnnouncement: (title: string, content: string, targetRole?: 'all' | 'candidates' | 'mentors') => void;
   deleteAnnouncement: (id: string) => void;
 
   // Reset

@@ -10,7 +10,6 @@ interface ProtectedRouteProps {
 
 const roleDashboardMap: Record<UserRole, string> = {
   admin: '/admin/dashboard',
-  judge: '/judge/dashboard',
   mentor: '/mentor/dashboard',
   candidate: '/dashboard',
 };
@@ -25,7 +24,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" replace />;
   }
 
-  // Internal staff roles (admin, judge, mentor) are always treated as approved
+  // Internal staff roles (admin, mentor) are always treated as approved
   const effectiveApprovalStatus: ApprovalStatus =
     user.role !== 'candidate' ? 'approved' : user.approvalStatus;
 

@@ -14,7 +14,6 @@ import {
   Megaphone,
   Settings,
   Scale,
-  Columns,
   GraduationCap,
   LogOut,
   X,
@@ -127,12 +126,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       ],
     },
     {
-      title: 'Nội dung & Chấm thi',
+      title: 'Nội dung & Kết quả',
       items: [
         { to: '/admin/topics', label: 'Quản lý Đề tài', icon: Lightbulb },
         { to: '/admin/checkpoints', label: 'Cấu hình chặng nộp', icon: CheckSquare },
         { to: '/admin/criteria', label: 'Tiêu chí chấm điểm', icon: Scale },
-        { to: '/admin/personnel', label: 'Giám khảo & Cố vấn', icon: GraduationCap },
+        { to: '/admin/personnel', label: 'Cố vấn chuyên môn', icon: GraduationCap },
         { to: '/admin/results', label: 'Kết quả & Công bố', icon: Award },
       ],
     },
@@ -141,18 +140,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       items: [
         { to: '/admin/announcements', label: 'Phát thông báo', icon: Megaphone },
         { to: '/admin/config', label: 'Cấu hình cuộc thi', icon: Settings },
-      ],
-    },
-  ];
-
-  const judgeMenuGroups: NavGroup[] = [
-    {
-      title: 'Hội đồng Giám khảo',
-      items: [
-        { to: '/judge/dashboard', label: 'Tổng quan Chấm thi', icon: LayoutDashboard },
-        { to: '/judge/split-screen', label: 'Chấm song song', icon: Columns },
-        { to: '/judge/topics', label: 'Đề tài & Đội thi', icon: Lightbulb },
-        { to: '/judge/results', label: 'Bảng tổng hợp điểm', icon: Award },
       ],
     },
   ];
@@ -177,11 +164,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const menuGroups =
     currentRole === 'admin'
       ? adminMenuGroups
-      : currentRole === 'judge'
-        ? judgeMenuGroups
-        : currentRole === 'mentor'
-          ? mentorMenuGroups
-          : candidateMenuGroups;
+      : currentRole === 'mentor'
+        ? mentorMenuGroups
+        : candidateMenuGroups;
 
   const roleBadgeMeta: {
     label: string;
@@ -189,14 +174,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   } =
     currentRole === 'admin'
       ? { label: 'Quản trị viên', variant: 'indigo' }
-      : currentRole === 'judge'
-        ? { label: 'Giám khảo', variant: 'warning' }
-        : currentRole === 'mentor'
-          ? { label: 'Cố vấn chuyên môn', variant: 'purple' }
-          : {
-              label: isApproved ? 'Thí sinh' : 'Chờ duyệt',
-              variant: isApproved ? 'success' : 'warning',
-            };
+      : currentRole === 'mentor'
+        ? { label: 'Cố vấn chuyên môn', variant: 'purple' }
+        : {
+            label: isApproved ? 'Thí sinh' : 'Chờ duyệt',
+            variant: isApproved ? 'success' : 'warning',
+          };
 
   const effectiveDesktopWidth = collapsed ? 64 : width;
 

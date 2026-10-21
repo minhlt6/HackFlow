@@ -2,12 +2,10 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu,
-  EyeOff,
   Sun,
   Moon,
   UserCog,
   ShieldCheck,
-  Scale,
   GraduationCap,
   User,
 } from 'lucide-react';
@@ -36,7 +34,6 @@ import type { Announcement } from '../../types';
 
 const SEGMENT_LABELS: Record<string, string> = {
   admin: 'Quản trị',
-  judge: 'Giám khảo',
   mentor: 'Cố vấn',
   dashboard: 'Tổng quan',
   approvals: 'Phê duyệt tài khoản',
@@ -45,12 +42,10 @@ const SEGMENT_LABELS: Record<string, string> = {
   topics: 'Quản lý Đề tài',
   checkpoints: 'Chặng nộp bài',
   criteria: 'Tiêu chí chấm điểm',
-  personnel: 'Giám khảo & Cố vấn',
+  personnel: 'Cố vấn chuyên môn',
   results: 'Kết quả & Công bố',
   announcements: 'Phát thông báo',
   config: 'Cấu hình cuộc thi',
-  'split-screen': 'Chấm song song',
-  judging: 'Chấm thi',
   'final-submission': 'Nộp bài chung cuộc',
   scoreboard: 'Bảng xếp hạng',
   tickets: 'Hỗ trợ trực tuyến',
@@ -61,7 +56,6 @@ const SEGMENT_LABELS: Record<string, string> = {
 export interface TopNavProps {
   contestName: string;
   currentPhase: string;
-  blindJudgingMode?: boolean;
   announcements: Announcement[];
   displayName: string;
   displayEmail: string;
@@ -72,7 +66,6 @@ export interface TopNavProps {
 export const TopNav: React.FC<TopNavProps> = ({
   contestName,
   currentPhase,
-  blindJudgingMode,
   displayName,
   displayEmail,
   avatarUrl,
@@ -95,7 +88,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   });
 
   const handleQuickRoleSwitch = (
-    personaKey: 'admin' | 'leader' | 'judge' | 'mentor',
+    personaKey: 'admin' | 'leader' | 'mentor',
     targetPath: string,
   ) => {
     const targetUser = mockUsers[personaKey];
@@ -168,13 +161,6 @@ export const TopNav: React.FC<TopNavProps> = ({
 
       {/* Right: Status Pills, Role Switcher, Theme Toggle, Notifications, User */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {blindJudgingMode && (
-          <div className="hidden md:flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-            <EyeOff size={13} />
-            <span>Chấm ẩn danh</span>
-          </div>
-        )}
-
         <div className="hidden md:flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-mono text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span>Live Sync</span>
@@ -202,15 +188,6 @@ export const TopNav: React.FC<TopNavProps> = ({
               <div className="flex flex-col">
                 <span>Quản trị viên (Admin)</span>
                 <span className="text-[10px] text-muted-foreground">Toàn quyền quản trị hệ thống</span>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => handleQuickRoleSwitch('judge', '/judge/dashboard')}
-            >
-              <Scale size={14} className="text-amber-500" />
-              <div className="flex flex-col">
-                <span>Giám khảo (Judge)</span>
-                <span className="text-[10px] text-muted-foreground">Hội đồng chấm thi độc lập</span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem

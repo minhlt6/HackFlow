@@ -29,15 +29,9 @@ import { AdminResultsPage } from './pages/admin/AdminResultsPage';
 import { AdminAnnouncementsPage } from './pages/admin/AdminAnnouncementsPage';
 import { AdminConfigPage } from './pages/admin/AdminConfigPage';
 
-// Judge Pages
-import { JudgeDashboardPage } from './pages/judge/JudgeDashboardPage';
-import { JudgeTopicsPage } from './pages/judge/JudgeTopicsPage';
-import { JudgeResultsPage } from './pages/judge/JudgeResultsPage';
-import { JudgingWorkspace } from './pages/JudgingWorkspace';
+// Shared & Mentor Pages
 import { Scoreboard } from './pages/Scoreboard';
 import { SupportTickets } from './pages/SupportTickets';
-
-// Mentor Pages
 import { MentorDashboardPage } from './pages/mentor/MentorDashboardPage';
 import { MentorTeamsPage } from './pages/mentor/MentorTeamsPage';
 import { MentorCheckpointsPage } from './pages/mentor/MentorCheckpointsPage';
@@ -65,17 +59,10 @@ const ROUTE_TITLES: Record<string, string> = {
   '/admin/topics': 'Quản lý Đề tài',
   '/admin/checkpoints': 'Cấu hình chặng nộp',
   '/admin/criteria': 'Tiêu chí chấm điểm',
-  '/admin/personnel': 'Giám khảo & Cố vấn',
+  '/admin/personnel': 'Cố vấn chuyên môn',
   '/admin/results': 'Kết quả & Công bố',
   '/admin/announcements': 'Phát thông báo',
   '/admin/config': 'Cấu hình cuộc thi',
-  // Judge
-  '/judge': 'Tổng quan Chấm thi',
-  '/judge/dashboard': 'Tổng quan Chấm thi',
-  '/judge/split-screen': 'Chấm song song',
-  '/judging': 'Không gian Giám khảo Chấm thi (Split-screen)',
-  '/judge/topics': 'Đề tài & Đội thi',
-  '/judge/results': 'Bảng tổng hợp điểm',
   // Mentor
   '/mentor': 'Tổng quan Cố vấn',
   '/mentor/dashboard': 'Tổng quan Cố vấn',
@@ -108,7 +95,6 @@ const RootTitleLayout: React.FC = () => {
 const RoleRootPage: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
-  if (user?.role === 'judge') return <Navigate to="/judge/dashboard" replace />;
   if (user?.role === 'mentor') return <Navigate to="/mentor/dashboard" replace />;
   return <CandidateDashboardPage />;
 };
@@ -134,7 +120,6 @@ const FallbackRedirect: React.FC = () => {
   }
   const homeByRole = {
     admin: '/admin/dashboard',
-    judge: '/judge/dashboard',
     mentor: '/mentor/dashboard',
     candidate: '/dashboard',
   }[user.role];
@@ -177,14 +162,6 @@ const router = createBrowserRouter([
         element: <UIPreviewPage />,
       },
       {
-        path: '/preview-judging',
-        element: (
-          <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8">
-            <JudgingWorkspace />
-          </div>
-        ),
-      },
-      {
         path: '/preview-tickets',
         element: (
           <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8">
@@ -224,14 +201,6 @@ const router = createBrowserRouter([
               { path: '/admin/results', element: <AdminResultsPage /> },
               { path: '/admin/announcements', element: <AdminAnnouncementsPage /> },
               { path: '/admin/config', element: <AdminConfigPage /> },
-
-              // Judge Routes
-              { path: '/judge', element: <JudgeDashboardPage /> },
-              { path: '/judge/dashboard', element: <JudgeDashboardPage /> },
-              { path: '/judge/split-screen', element: <JudgingWorkspace /> },
-              { path: '/judging', element: <JudgingWorkspace /> },
-              { path: '/judge/topics', element: <JudgeTopicsPage /> },
-              { path: '/judge/results', element: <JudgeResultsPage /> },
 
               // Mentor Routes
               { path: '/mentor', element: <MentorDashboardPage /> },

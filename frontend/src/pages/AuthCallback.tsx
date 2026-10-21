@@ -37,7 +37,7 @@ interface AuthResponse extends AuthPayload {
   data?: AuthPayload;
 }
 
-const userRoles: UserRole[] = ['admin', 'judge', 'mentor', 'candidate'];
+const userRoles: UserRole[] = ['admin', 'mentor', 'candidate'];
 const approvalStatuses: ApprovalStatus[] = ['pending', 'approved', 'rejected'];
 
 const isUserRole = (value: string): value is UserRole => userRoles.includes(value as UserRole);
@@ -78,9 +78,9 @@ const normalizeUser = (backendUser: BackendUser | undefined): User | null => {
 
 const syncMockStoreWithUser = (user: User) => {
   const mockStore = useMockStore.getState();
-  let targetPersona: 'admin' | 'judge' | 'mentor' | 'leader' | 'member' | 'pending' | 'rejected';
+  let targetPersona: 'admin' | 'mentor' | 'leader' | 'member' | 'pending' | 'rejected';
   if (user.role === 'admin') targetPersona = 'admin';
-  else if (user.role === 'judge') targetPersona = 'judge';
+
   else if (user.role === 'mentor') targetPersona = 'mentor';
   else if (user.approvalStatus === 'pending') targetPersona = 'pending';
   else if (user.approvalStatus === 'rejected') targetPersona = 'rejected';
@@ -109,7 +109,7 @@ const getRedirectPath = (user: User): string => {
 
   return {
     admin: '/admin/dashboard',
-    judge: '/judge/dashboard',
+
     mentor: '/mentor/dashboard',
     candidate: '/dashboard',
   }[user.role];

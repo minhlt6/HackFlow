@@ -38,7 +38,7 @@ const skillOptions = [
 
 const rolePaths: Record<UserRole, string> = {
   admin: '/admin/dashboard',
-  judge: '/judge/dashboard',
+
   mentor: '/mentor/dashboard',
   candidate: '/dashboard',
 };
@@ -319,7 +319,7 @@ export const OnboardingPage: React.FC = () => {
 
       const rawRole = (result.role || result.user?.role || user?.role || 'candidate').toLowerCase();
       const mappedRole: UserRole =
-        rawRole === 'candidate' || rawRole === 'admin' || rawRole === 'judge' || rawRole === 'mentor'
+        rawRole === 'candidate' || rawRole === 'admin' || rawRole === 'mentor'
           ? (rawRole as UserRole)
           : 'candidate';
 

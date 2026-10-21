@@ -19,7 +19,7 @@ export const AdminAnnouncementsPage: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [targetRole, setTargetRole] = useState<'all' | 'candidates' | 'judges' | 'mentors'>('all');
+  const [targetRole, setTargetRole] = useState<'all' | 'candidates' | 'mentors'>('all');
   const [alert, setAlert] = useState<string | null>(null);
 
   const handleDelete = (id: string, annTitle: string) => {
@@ -53,7 +53,7 @@ export const AdminAnnouncementsPage: React.FC = () => {
             Phát Thông Báo Cuộc Thi
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Gửi thông điệp khẩn cấp hoặc cập nhật thời hạn tới tất cả thí sinh, giám khảo và cố vấn.
+            Gửi thông điệp khẩn cấp hoặc cập nhật thời hạn tới tất cả thí sinh và cố vấn.
           </p>
         </div>
 
@@ -77,7 +77,7 @@ export const AdminAnnouncementsPage: React.FC = () => {
             <Megaphone size={40} className="mx-auto text-muted-foreground mb-3" />
             <h3 className="font-semibold tracking-tight text-foreground text-lg text-foreground mb-1">Chưa Có Thông Báo Nào</h3>
             <p className="text-muted-foreground text-xs max-w-sm mx-auto mb-4">
-              Ban tổ chức chưa phát đi thông báo nào tới thí sinh và hội đồng. Hãy tạo thông báo mới khi có thông tin cần truyền tải.
+              Ban tổ chức chưa phát đi thông báo nào tới thí sinh và cố vấn. Hãy tạo thông báo mới khi có thông tin cần truyền tải.
             </p>
             <Button variant="primary" size="sm" onClick={() => setIsAddOpen(true)} className="gap-1.5">
               <Plus size={14} />
@@ -104,7 +104,7 @@ export const AdminAnnouncementsPage: React.FC = () => {
                         ? 'Tất cả mọi người'
                         : ann.targetRole === 'candidates'
                         ? 'Thí sinh'
-                        : 'Giám khảo'}
+                        : 'Cố vấn'}
                     </Badge>
                   </div>
                   <button
@@ -143,12 +143,11 @@ export const AdminAnnouncementsPage: React.FC = () => {
             <label className="text-muted-foreground font-medium text-xs">Đối tượng nhận thông báo *</label>
             <select
               value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value as 'all' | 'candidates' | 'judges' | 'mentors')}
+              onChange={(e) => setTargetRole(e.target.value as 'all' | 'candidates' | 'mentors')}
               className="p-2.5 rounded-[10px] bg-muted/40 dark:bg-slate-900/60 border border-border text-foreground text-xs focus:border-[#6366F1] focus:outline-none"
             >
               <option value="all">Toàn bộ cuộc thi (Tất cả vai trò)</option>
               <option value="candidates">Chỉ Thí sinh</option>
-              <option value="judges">Chỉ Ban Giám Khảo</option>
               <option value="mentors">Chỉ Cố Vấn</option>
             </select>
           </div>

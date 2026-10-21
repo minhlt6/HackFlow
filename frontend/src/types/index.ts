@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'judge' | 'mentor' | 'candidate';
+export type UserRole = 'admin' | 'mentor' | 'candidate';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
@@ -238,7 +238,7 @@ export interface Announcement {
   content: string;
   sender?: string;
   author?: string;
-  targetRole?: 'all' | 'candidates' | 'judges' | 'mentors';
+  targetRole?: 'all' | 'candidates' | 'mentors';
   createdAt?: string;
   publishedAt?: string;
   isPinned?: boolean;

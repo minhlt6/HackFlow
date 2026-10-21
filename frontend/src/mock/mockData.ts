@@ -94,7 +94,7 @@ export const mockUsers: Record<string, User> = {
     id: 'user-judge-1',
     email: 'judge.tech@hackathon.org',
     fullName: 'PGS. TS. Trần Giám Khảo',
-    role: 'judge',
+    role: 'mentor',
     approvalStatus: 'approved',
     organization: 'Đại học Bách Khoa Hà Nội & Viện Công nghệ Tiên tiến',
     position: 'Trưởng bộ môn Khoa học Máy tính',

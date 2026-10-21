@@ -51,7 +51,6 @@ export const MainLayout: React.FC = () => {
 
     let targetPersona:
       | 'admin'
-      | 'judge'
       | 'mentor'
       | 'leader'
       | 'member'
@@ -60,8 +59,6 @@ export const MainLayout: React.FC = () => {
 
     if (user.role === 'admin') {
       targetPersona = 'admin';
-    } else if (user.role === 'judge') {
-      targetPersona = 'judge';
     } else if (user.role === 'mentor') {
       targetPersona = 'mentor';
     } else if (user.approvalStatus === 'pending') {
@@ -192,7 +189,6 @@ export const MainLayout: React.FC = () => {
             config?.currentPhase ||
             'Giai đoạn 3: Thực thi dự án và Nộp bài các chặng'
           }
-          blindJudgingMode={config?.blindJudgingMode}
           announcements={announcements}
           displayName={displayName}
           displayEmail={displayEmail}

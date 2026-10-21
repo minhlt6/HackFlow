@@ -510,7 +510,7 @@ export const AdminTeamsPage: React.FC = () => {
       {viewMode === 'permission_denied' ? (
         <PermissionDeniedState
           requiredRole="Quản trị viên Hệ thống (System Admin)"
-          currentRole="Giám khảo Chấm thi (Judge — Read-only)"
+          currentRole="Cố vấn Chuyên môn (Mentor — Read-only)"
           description="Tài khoản của bạn đang ở chế độ mô phỏng phân quyền hạn chế (403 Forbidden). Chỉ Quản trị viên mới có quyền phê duyệt hoặc chỉnh sửa danh sách đội thi."
           onBack={() => setViewMode('normal')}
         />
