@@ -428,7 +428,7 @@ def create_app() -> FastAPI:
         },
         servers=[
             {"url": "http://127.0.0.1:8000", "description": "Local Development Server"},
-            {"url": "http://localhost:8000", "description": "Localhost Development Server"},
+            {"url": "https://api.hackflow.dev", "description": "Staging / Production Server (Mock)"},
         ],
         swagger_ui_parameters={
             "defaultModelsExpandDepth": 2,
@@ -440,10 +440,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # 1. Cấu hình CORS Middleware (Local Development)
+    # 1. Cấu hình CORS Middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
+        allow_origin_regex=r"https://.*\.(vercel\.app|up\.railway\.app|onrender\.com)",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
