@@ -11,7 +11,9 @@ const apiBaseUrl = configuredBaseUrl
   ? configuredBaseUrl.endsWith('/api/v1')
     ? configuredBaseUrl
     : `${configuredBaseUrl}/api/v1`
-  : 'http://localhost:8000/api/v1';
+  : import.meta.env.DEV
+    ? 'http://localhost:8000/api/v1'
+    : 'https://hackflow9-production.up.railway.app/api/v1';
 
 export const axiosClient = axios.create({
   baseURL: apiBaseUrl,

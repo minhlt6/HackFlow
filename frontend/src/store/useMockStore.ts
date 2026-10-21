@@ -4,7 +4,6 @@ import type {
   User,
   Team,
   MajorTopic,
-  SubTopic,
   Checkpoint,
   CheckpointSubmission,
   FinalSubmission,
@@ -164,11 +163,7 @@ interface MockStoreState {
   // Announcements
   announcements: Announcement[];
   addAnnouncement: (title: string, content: string, isPinned?: boolean) => void;
-  broadcastAnnouncement: (
-    title: string,
-    content: string,
-    targetRole?: 'all' | 'candidates' | 'judges' | 'mentors',
-  ) => void;
+  broadcastAnnouncement: (title: string, content: string, targetRole?: 'all' | 'candidates' | 'judges' | 'mentors') => void;
   deleteAnnouncement: (id: string) => void;
 
   // Reset
@@ -647,7 +642,7 @@ export const useMockStore = create<MockStoreState>()(
         if (!team) return { success: false, message: 'Đội thi không tồn tại.' };
 
         // Find the subtopic
-        let targetSubTopic: SubTopic | null = null;
+        let targetSubTopic: MockStoreState['majorTopics'][number]['subTopics'][number] | null = null;
         for (const major of get().majorTopics) {
           const sub = major.subTopics.find((s) => s.id === subTopicId);
           if (sub) {
@@ -658,12 +653,13 @@ export const useMockStore = create<MockStoreState>()(
 
         if (!targetSubTopic) return { success: false, message: 'Đề tài không tồn tại.' };
 
-        const curTeams = targetSubTopic.currentTeams ?? targetSubTopic.registeredTeamsCount ?? 0;
-        const maxQuota = targetSubTopic.maxTeamsQuota ?? targetSubTopic.quota ?? 3;
-        if (curTeams >= maxQuota) {
+        const targetCurTeams = targetSubTopic.currentTeams ?? targetSubTopic.registeredTeamsCount ?? 0;
+        const targetMaxQuota = targetSubTopic.maxTeamsQuota ?? targetSubTopic.quota ?? 3;
+
+        if (targetCurTeams >= targetMaxQuota) {
           return {
             success: false,
-            message: `Đề tài "${targetSubTopic.title}" đã đạt giới hạn tối đa ${maxQuota} đội. Vui lòng chọn đề tài khác.`,
+            message: `Đề tài "${targetSubTopic.title}" đã đạt giới hạn tối đa ${targetMaxQuota} đội. Vui lòng chọn đề tài khác.`,
           };
         }
 
@@ -721,7 +717,7 @@ export const useMockStore = create<MockStoreState>()(
                 ...sub,
                 currentTeams: newCount,
                 registeredTeamsCount: newCount,
-                status: 'OPEN' as 'OPEN' | 'CLOSED',
+                status: 'OPEN' as const,
               };
             }
             return sub;
