@@ -26,7 +26,8 @@
 * **Kiểm soát Tiến độ bằng Checkpoint:** Time-gated tự động mở/khóa theo giờ Server, thí sinh nộp bài theo từng chặng.
 * **Chống gian lận Commit SHA Freeze:** Tự động gọi GitHub API đóng băng mã Commit hash tại deadline, phát hiện ngay nếu thí sinh push code bổ sung sau thời hạn.
 * **Chọn đề tài Concurrency Control:** Đảm bảo tính nguyên tử (Atomic transaction) khi nhiều đội cùng đăng ký 1 đề tài giới hạn số lượng.
-* **Tiêu chí Barem Rubric & Bảng xếp hạng:** Cấu hình trọng số tiêu chí Rubric và công bố Bảng xếp hạng Leaderboard tự động.
+* **Mô hình "AI Thực Chiến" (Đa Phòng & Chia Zone):** Hỗ trợ nhiều lớp học / phòng thi bắt đầu ở các khung giờ khác nhau (dùng chung Đề thi & Mentor), mỗi phòng có người quản lý riêng, cấu hình thời gian nộp Checkpoint riêng và chia thành các Zone.
+* **Chấm điểm Chéo 3 Giai đoạn (3-Stage Peer Cross-Grading):** Sau khi hết giờ, các đội chấm chéo trong Zone để chọn **Top 1 mỗi Zone** thuyết trình cấp Phòng; tiếp theo chọn **Top 1 hoặc Top 3 mỗi Phòng** lên thuyết trình chéo Liên phòng để các nhóm khác chấm điểm chung cuộc.
 * **Hỗ trợ qua Kênh Ticket 3 Trạng thái:** Phân luồng câu hỏi theo đề tài của Mentor, tránh trôi tin nhắn và bảo vệ tính công bằng (Mentor không chấm bài đội mình kèm).
 
 ---

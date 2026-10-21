@@ -28,6 +28,7 @@ docs/
 | [`hf-23-dac-ta-srs-luong-checkpoint-nop-bai.md`](./ba/hf-23-dac-ta-srs-luong-checkpoint-nop-bai.md) | Đặc tả SRS luồng Checkpoint Time-Gated (Server UTC + Ân hạn 5s) & Nộp bài đóng băng GitHub Commit SHA | Đinh Phương Ly | Sprint 3 |
 | [`hf-24-dac-ta-srs-module-thong-bao-chung.md`](./ba/hf-24-dac-ta-srs-module-thong-bao-chung.md) | Đặc tả SRS Module Thông báo chung (Announcements Banner, Bell & Urgent Modal) | Đinh Phương Ly | Sprint 3 |
 | [`hf-35-thiet-ke-kich-ban-uat-test-cases-bo-sung-luon.md`](./ba/hf-35-thiet-ke-kich-ban-uat-test-cases-bo-sung-luon.md) | Bộ kịch bản kiểm thử nghiệm thu người dùng (UAT Test Cases) bổ sung | Đinh Phương Ly | Sprint 4 |
+| [`ai-thuc-chien-srs-rooms-zones-peer-grading.md`](./ba/ai-thuc-chien-srs-rooms-zones-peer-grading.md) | Đặc tả SRS mô hình "AI Thực Chiến": Đa Phòng học (`Room`), Chia `Zone`, Lịch Checkpoint theo Phòng & Chấm chéo 3 Giai đoạn (`Zone` -> `Room` -> `Cross-Room`) | Đinh Phương Ly | Sprint 4 |
 | [`hf-37-dac-ta-srs-phan-he-helpdesk-ticket-3-trang-th.md`](./ba/hf-37-dac-ta-srs-phan-he-helpdesk-ticket-3-trang-th.md) | Đặc tả SRS Phân hệ Helpdesk Ticket hỗ trợ & Ma trận phân quyền cô lập dữ liệu Mentor | Đinh Phương Ly | Sprint 4 |
 | [`hf-38-thiet-ke-kich-ban-kiem-thu-uat-tong-the-sprin.md`](./ba/hf-38-thiet-ke-kich-ban-kiem-thu-uat-tong-the-sprin.md) | Bộ kịch bản kiểm thử UAT tổng thể Sprint 4 (Rubrics, Leaderboard & Helpdesk Tickets) | Đinh Phương Ly | Sprint 4 |
 

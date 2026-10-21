@@ -10,8 +10,8 @@
 ## 1. Tổng quan Kiến trúc (Executive Overview)
 
 **HackFlow9** được thiết kế theo kiến trúc **Client–Server phân tách độc lập (Decoupled Full-Stack Architecture)** kết hợp mô hình **3 tầng (3-Tier Layered Architecture)** ở phía Backend và **Reactive Dual-Store SPA** ở phía Frontend. Hệ thống giải quyết trọn vẹn vòng đời một kỳ thi Hackathon học thuật qua **3 cổng vai trò (Role Portals)**:
-1. **Candidate Portal (`candidate`)**: Đăng ký/Onboarding hồ sơ & kỹ năng, ghép đội bằng mã mời 6 ký tự, chuyển quyền Đội trưởng, đăng ký đề tài giới hạn quota, nộp bài theo Checkpoint Time-gated (đóng băng GitHub Commit SHA), gửi Ticket hỏi Mentor và theo dõi Bảng xếp hạng.
-2. **Admin Center (`admin`)**: Quản trị cấu hình cuộc thi, quản lý danh sách Whitelist email, xét duyệt hồ sơ thí sinh (`pending` → `approved`/`rejected`), quản lý đề tài/quota, cấu hình mốc thời gian Checkpoint, thiết lập Barem tiêu chí chấm (`RubricCriteria`), phân công Mentor và công bố kết quả.
+1. **Candidate Portal (`candidate`)**: Đăng ký/Onboarding hồ sơ & kỹ năng, ghép đội bằng mã mời 6 ký tự, nhận phân bổ Phòng (`Room`) & Khu vực (`Zone`), đăng ký đề tài dùng chung, nộp bài theo lịch Checkpoint riêng của Phòng, và tham gia **Chấm điểm chéo 3 giai đoạn** (Vòng 1 trong Zone → Vòng 2 cấp Phòng → Vòng 3 Liên phòng).
+2. **Admin Center & Room Manager (`admin`)**: Quản trị cấu hình cuộc thi, quản lý đa Phòng học (`Room`) bắt đầu ở các khung giờ khác nhau, gán Người quản lý phòng, cấu hình thời gian Checkpoint riêng cho từng Phòng, chia `Zone` trong phòng, điều phối chuyển giai đoạn chấm điểm 1 → 2 → 3 và công bố kết quả.
 3. **Mentor Helpdesk (`mentor`)**: Tiếp nhận, phân loại và phản hồi Ticket hỗ trợ của các đội thi theo quy trình 3 trạng thái (`open` → `in_progress` → `resolved`), theo dõi tiến độ các đội được phân công.
 
 ---
