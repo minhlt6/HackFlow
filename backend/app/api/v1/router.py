@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     example,
     health,
     leaderboard,
+    rooms,
     rubrics,
     submissions,
     teams,
@@ -34,8 +35,13 @@ api_router.include_router(submissions.router, prefix="/submissions", tags=["Subm
 api_router.include_router(announcements.router, prefix="/announcements", tags=["Announcements (HF-27)"])
 api_router.include_router(tickets.router, prefix="/tickets", tags=["Support Tickets (HF-37)"])
 
-# Sprint 4 modules
+# Sprint 4 & AI Thực Chiến modules
 api_router.include_router(rubrics.router, prefix="/rubrics", tags=["Rubrics (HF-42)"])
+api_router.include_router(
+    rooms.router,
+    prefix="/rooms",
+    tags=["AI Thực Chiến — Rooms, Zones & 3-Stage Peer Grading"],
+)
 api_router.include_router(
     leaderboard.router, prefix="/leaderboard", tags=["Leaderboard & Results (HF-43)"]
 )

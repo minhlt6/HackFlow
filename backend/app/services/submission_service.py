@@ -230,10 +230,22 @@ class SubmissionService:
 
         # ── Bước 2.2 & Mục 3: Kiểm tra trạng thái Checkpoint & Công thức Time-Gated + Grace Period ──
         server_timestamp = ensure_utc(payload.simulate_time or datetime.now(timezone.utc))
-        gate_info = checkpoint_service.calculate_time_gate_info(checkpoint, now=server_timestamp)
+        from app.services.room_service import room_service
+
+        room_sched = await room_service.get_room_schedule_for_team_checkpoint(
+            db, team_id=team_id, checkpoint_id=str(checkpoint.id)
+        )
+        gate_info = checkpoint_service.calculate_time_gate_info(
+            checkpoint,
+            now=server_timestamp,
+            override_start_time=room_sched.start_time if room_sched else None,
+            override_deadline=room_sched.deadline if room_sched else None,
+            override_is_active=room_sched.is_active if room_sched else None,
+        )
+        effective_active = bool(room_sched.is_active if room_sched is not None else checkpoint.is_active)
         grace_sec = gate_info.get("grace_period_seconds", 5)
 
-        if not checkpoint.is_active:
+        if not effective_active:
             raise BadRequestException(
                 message="Checkpoint này hiện đang tạm khóa hoặc không ở trạng thái hoạt động (inactive).",
                 error_code="INVALID_CHECKPOINT_STATUS",
