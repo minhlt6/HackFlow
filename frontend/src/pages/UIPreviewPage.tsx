@@ -39,8 +39,8 @@ export const UIPreviewPage: React.FC = () => {
       ? 'Checkpoint 3: MVP Hoàn chỉnh & Video Pitch Deck (Chặng cuối)'
       : 'Checkpoint 2: Báo cáo Kiến trúc & Prototype (Chặng tiến độ)',
     description: isPreviewFinal
-      ? 'Chặng chốt sản phẩm: Bắt buộc GitHub repo và hệ thống sẽ đóng băng Commit SHA.'
-      : 'Chặng tiến độ: Render theo submission_fields, ẩn ô GitHub repo và không đóng băng commit.',
+      ? 'Chặng chốt sản phẩm: Bắt buộc điền đường dẫn GitHub repo và các tài liệu bàn giao.'
+      : 'Chặng tiến độ: Render theo submission_fields, ẩn ô GitHub repo nếu không yêu cầu.',
     start_time: previewStartTime,
     deadline: previewDeadline,
     is_active: previewWindowStatus !== 'closed',
@@ -55,7 +55,7 @@ export const UIPreviewPage: React.FC = () => {
             field_key: 'repo_url',
             field_label: 'GitHub Repository URL',
             required: true,
-            apply_sha_freeze: true,
+            apply_sha_freeze: false,
           },
           {
             field_key: 'demo_url',
@@ -89,11 +89,7 @@ export const UIPreviewPage: React.FC = () => {
           team_id: 'team-01',
           repo_url: isPreviewFinal ? 'https://github.com/cyber-samurai/hackflow-mvp' : null,
           demo_url: 'https://hackflow-demo.vercel.app',
-          commit_sha:
-            isPreviewFinal &&
-            (previewSubState === 'submitted' || previewSubState === 'evaluated')
-              ? 'a1b2c3d4e5f678901234567890abcdef12345678'
-              : null,
+          commit_sha: null,
           status: previewSubState,
           grace_period_applied: previewGraceApplied,
           submitted_at: new Date().toISOString(),
@@ -257,7 +253,7 @@ export const UIPreviewPage: React.FC = () => {
                       : 'bg-muted/40 dark:bg-slate-900/60 text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Chặng cuối (Freeze SHA)
+                  Chặng cuối
                 </button>
               </div>
 
@@ -314,8 +310,6 @@ export const UIPreviewPage: React.FC = () => {
                 [
                   'none',
                   'submitted',
-                  'pending_sha_freeze',
-                  'sha_verification_failed',
                   'evaluated',
                   'invalid',
                 ] as const
@@ -365,7 +359,7 @@ export const UIPreviewPage: React.FC = () => {
                 7. Bảng hiển thị lịch sử nộp bài (HF-31)
               </h2>
               <p className="text-xs text-muted-foreground">
-                Demo tích hợp API GET /submissions, sort theo submitted_at giảm dần, cắt ngắn Commit SHA 7 ký tự (cắt đuôi .git), hiển thị link động từ submission_data và nhãn thời gian tự động cập nhật.
+                Demo tích hợp API GET /submissions, sort theo submitted_at giảm dần, hiển thị link động từ submission_data và nhãn thời gian tự động cập nhật.
               </p>
             </div>
 
@@ -416,15 +410,13 @@ export const UIPreviewPage: React.FC = () => {
                       id: 'preview-sub-v3',
                       checkpoint_id: previewCheckpoint.id,
                       team_id: 'team-01',
-                      // Test URL có đuôi .git để kiểm tra hàm getCommitUrl cắt đuôi .git (Lỗi 4)
                       repo_url: 'https://github.com/cyber-samurai/hackflow-mvp.git',
                       demo_url: 'https://hackflow-demo.vercel.app',
-                      commit_sha: 'a1b2c3d4e5f678901234567890abcdef12345678', // SHA 40 ký tự
+                      commit_sha: null,
                       status: 'submitted',
                       grace_period_applied: true,
-                      submitted_at: sampleTwoMinutesAgoTime, // "2 phút trước"
+                      submitted_at: sampleTwoMinutesAgoTime,
                       note: 'Bản nộp hoàn thiện MVP với Live Demo và tài liệu kiểm thử',
-                      // Test trường động từ submission_data (Lỗi 3)
                       submission_data: {
                         presentation_pdf: 'https://slides.google.com/presentation/d/hackflow-pitch-deck',
                       },
@@ -435,10 +427,10 @@ export const UIPreviewPage: React.FC = () => {
                       team_id: 'team-01',
                       repo_url: 'https://github.com/cyber-samurai/hackflow-mvp',
                       demo_url: 'https://figma.com/@cybersamurai/hackflow',
-                      commit_sha: '9f8e7d6c5b4a3210fedcba9876543210abcdef12',
+                      commit_sha: null,
                       status: 'evaluated',
                       grace_period_applied: false,
-                      submitted_at: '2026-10-12T15:30:00.000Z', // "12/10/2026 15:30"
+                      submitted_at: '2026-10-12T15:30:00.000Z',
                       feedback: 'Sản phẩm hoàn thiện tốt, đáp ứng 100% tiêu chí đề bài. Điểm: 9.5/10',
                       note: 'Bản nộp thử nghiệm đợt 2',
                     },
@@ -449,10 +441,10 @@ export const UIPreviewPage: React.FC = () => {
                       repo_url: 'https://github.com/cyber-samurai/hackflow-mvp',
                       demo_url: null,
                       commit_sha: null,
-                      status: 'pending_sha_freeze', // Test trạng thái "Đang lấy SHA..." (Lỗi 3)
+                      status: 'submitted',
                       grace_period_applied: false,
                       submitted_at: '2026-10-10T10:15:00.000Z',
-                      note: 'Bản nộp ghi nhận thời gian hợp lệ, đang freeze SHA',
+                      note: 'Bản nộp khởi tạo kho mã nguồn',
                     },
                   ]
             }

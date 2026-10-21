@@ -108,7 +108,7 @@ export const initialHackathonConfig: HackathonConfig = {
   description: 'Sân chơi sáng tạo công nghệ trí tuệ nhân tạo và hệ thống thông minh đột phá dành cho sinh viên xuất sắc toàn quốc.',
   logoUrl: '/hackflow-logo.svg',
   bannerUrl: '/login-background.png',
-  rules: '1. Mỗi đội thi có từ 3 đến 5 thành viên.\n2. Mỗi đề tài con có giới hạn số lượng đội tối đa (quota).\n3. Mã commit SHA được hệ thống đóng băng tự động tại thời điểm kết thúc hạn nộp.\n4. Đội không nộp 2 chặng liên tiếp sẽ bị truất quyền thi đấu.',
+  rules: '1. Mỗi đội thi có từ 3 đến 5 thành viên.\n2. Mỗi đề tài con có giới hạn số lượng đội tối đa (quota).\n3. Các đội thi cần hoàn thành bài nộp trước thời điểm kết thúc hạn nộp của từng chặng.\n4. Đội không nộp 2 chặng liên tiếp sẽ bị truất quyền thi đấu.',
   prizes: [
     { rank: 'Giải Nhất', reward: '100,000,000 VNĐ', description: 'Cúp vàng + Chuyến tham quan Trung tâm Đổi mới Sáng tạo Quốc gia (NIC)' },
     { rank: 'Giải Nhì', reward: '50,000,000 VNĐ', description: 'Cúp bạc + Học bổng chuyên sâu Deep Learning' },
@@ -583,13 +583,13 @@ export const initialCheckpoints: Checkpoint[] = [
     id: 'cp-03',
     name: 'Chặng 03: Tích hợp Hệ thống & Đóng gói Hoàn thiện',
     title: 'Chặng 03: Tích hợp Hệ thống & Đóng gói Hoàn thiện',
-    description: 'Hoàn thiện giao diện người dùng, tích hợp luồng hoàn chỉnh và nộp mã Commit SHA đóng băng.',
+    description: 'Hoàn thiện giao diện người dùng, tích hợp luồng hoàn chỉnh và bàn giao kho mã nguồn GitHub chính thức.',
     requirements: ['Bản chạy thử trực tiếp ổn định', 'Tối ưu hóa độ trễ xử lý', 'Bộ kiểm thử tự động'],
     submissionFields: [
       {
         id: 'f-repo',
         type: 'repoUrl',
-        label: 'GitHub Repository (Đóng băng Commit cuối)',
+        label: 'GitHub Repository (Mã nguồn hoàn chỉnh)',
         placeholder: 'https://github.com/organization/project-repo',
         required: true,
         description: 'Mã nguồn hoàn chỉnh kèm file README hướng dẫn deploy',

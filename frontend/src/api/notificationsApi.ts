@@ -11,9 +11,9 @@ const INITIAL_MOCK_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif-urgent-01',
     type: 'URGENT',
-    title: 'Xác nhận quan trọng: Quy định đóng băng Commit SHA',
+    title: 'Xác nhận quan trọng: Quy định nộp bài các chặng Checkpoint',
     content:
-      'Hệ thống ghi nhận thời hạn nộp bài chặng hiện tại đang áp dụng cơ chế đóng băng Commit SHA từ GitHub. Vui lòng đảm bảo repository ở chế độ Public và kiểm tra kỹ mã commit trước khi hoàn tất nộp bài.',
+      'Hệ thống ghi nhận thời hạn nộp bài chặng hiện tại đang mở. Vui lòng đảm bảo đường dẫn tài liệu và GitHub repository hợp lệ trước khi hoàn tất nộp bài.',
     target_scope: 'ALL',
     created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     is_read: false,

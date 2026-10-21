@@ -145,7 +145,7 @@ export const CandidateCheckpointsPage: React.FC = () => {
               Tiến độ và Nộp bài Checkpoint
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Quản lý tiến độ các chặng thi, đóng băng Commit SHA và theo dõi lịch sử bài nộp của đội.
+              Quản lý tiến độ các chặng thi và theo dõi lịch sử bài nộp của đội.
             </p>
           </div>
         </div>
@@ -203,7 +203,7 @@ export const CandidateCheckpointsPage: React.FC = () => {
                           {getStatusBadge(cp.status)}
                           {isFinal ? (
                             <Badge variant="danger" size="sm">
-                              Chặng cuối (Chốt SHA)
+                              Chặng cuối
                             </Badge>
                           ) : (
                             <Badge variant="indigo" size="sm">
@@ -249,18 +249,14 @@ export const CandidateCheckpointsPage: React.FC = () => {
                       {hasSubmitted && cp.latest_submission && (
                         <span
                           className={`text-[10px] font-mono ${
-                            subMeta?.normalizedStatus === 'sha_verification_failed'
-                              ? 'text-amber-700 dark:text-amber-400'
-                              : subMeta?.normalizedStatus === 'invalid'
+                            subMeta?.normalizedStatus === 'invalid'
                               ? 'text-rose-700 dark:text-rose-400'
                               : 'text-emerald-700 dark:text-emerald-400'
                           }`}
                         >
-                          {cp.latest_submission.commit_sha
-                            ? `Commit: ${cp.latest_submission.commit_sha.slice(0, 7)}`
-                            : subMeta?.normalizedStatus === 'sha_verification_failed'
-                            ? 'Chờ xác minh SHA'
-                            : 'Đã nộp báo cáo'}
+                          {subMeta?.normalizedStatus === 'invalid'
+                            ? 'Bài nộp không hợp lệ'
+                            : 'Đã nộp bài'}
                         </span>
                       )}
                     </div>
@@ -277,10 +273,10 @@ export const CandidateCheckpointsPage: React.FC = () => {
               </div>
               <ul className="list-disc pl-4 space-y-1.5 text-muted-foreground leading-relaxed text-[11px]">
                 <li>
-                  <strong className="text-muted-foreground">Chặng tiến độ trung gian:</strong> Nộp tài liệu theo cấu hình động (<code className="text-primary">submission_fields</code>). Không yêu cầu GitHub repo và không khóa Commit SHA để tiếp tục code bình thường.
+                  <strong className="text-muted-foreground">Chặng tiến độ trung gian:</strong> Nộp tài liệu theo cấu hình động (<code className="text-primary">submission_fields</code>). Không bắt buộc nộp GitHub repo để đội thi tiếp tục phát triển bình thường.
                 </li>
                 <li>
-                  <strong className="text-muted-foreground">Chặng cuối cùng (Final):</strong> Bắt buộc URL GitHub repository public (bắt đầu bằng <code className="text-primary">https://github.com/</code>). Hệ thống sẽ đóng băng Commit SHA tại thời điểm nộp.
+                  <strong className="text-muted-foreground">Chặng cuối cùng (Final):</strong> Bắt buộc điền URL GitHub repository hợp lệ (bắt đầu bằng <code className="text-primary">https://github.com/</code>) kèm các tài liệu bàn giao của đội.
                 </li>
                 <li>
                   <strong className="text-amber-700 dark:text-amber-400">Phân quyền:</strong> Chỉ tài khoản có vai trò Đội trưởng (<code className="text-amber-700 dark:text-amber-400 font-mono">TEAM_LEADER</code>) mới có quyền bấm nộp bài để tránh xung đột dữ liệu.
@@ -347,14 +343,14 @@ export const CandidateCheckpointsPage: React.FC = () => {
                     <div className="p-3 rounded-[10px] bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
                       <AlertTriangle size={15} className="shrink-0 text-amber-700 dark:text-amber-400" />
                       <span>
-                        Đây là chặng cuối cùng: Hệ thống sẽ khóa và đóng băng Commit SHA khi nộp.
+                        Đây là chặng cuối cùng: Bắt buộc cung cấp đường dẫn kho mã nguồn GitHub của sản phẩm.
                       </span>
                     </div>
                   ) : (
                     <div className="p-3 rounded-[10px] bg-indigo-500/10 border border-indigo-500/20 text-xs text-primary flex items-center gap-2">
                       <Info size={15} className="shrink-0 text-primary" />
                       <span>
-                        Chặng tiến độ: Không yêu cầu GitHub repo và không đóng băng commit, bạn tiếp tục code bình thường.
+                        Chặng tiến độ: Bạn chỉ cần nộp tài liệu báo cáo theo yêu cầu và tiếp tục phát triển mã nguồn bình thường.
                       </span>
                     </div>
                   )}
@@ -384,7 +380,7 @@ export const CandidateCheckpointsPage: React.FC = () => {
                       </h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {selectedCheckpoint.is_final_checkpoint
-                          ? 'Điền đường dẫn GitHub repo để hệ thống tiến hành kiểm tra và chốt Commit SHA.'
+                          ? 'Điền đường dẫn GitHub repo và các tài liệu bàn giao cho sản phẩm cuối cùng.'
                           : 'Nộp link tài liệu báo cáo tiến độ, wireframe hoặc link demo theo cấu hình.'}
                       </p>
                     </div>

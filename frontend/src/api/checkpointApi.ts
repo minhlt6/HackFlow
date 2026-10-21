@@ -51,7 +51,7 @@ const INITIAL_MOCK_CHECKPOINTS: CheckpointWithSubmission[] = [
     description: 'Nộp báo cáo tiến độ khung hệ thống (Frontend + Backend skeleton), tài liệu API hoặc Prototype.',
     start_time: '2026-10-09T00:00:00.000Z',
     deadline: new Date(Date.now() + (2 * 24 * 3600 + 4 * 3600) * 1000).toISOString(),
-    requirements: 'Link báo cáo tiến độ, tài liệu kiến trúc hoặc link demo (Không bắt buộc GitHub và không đóng băng SHA).',
+    requirements: 'Link báo cáo tiến độ, tài liệu kiến trúc hoặc link demo (Không bắt buộc GitHub repo).',
     is_active: true,
     is_final_checkpoint: false, // Chặng tiến độ trung gian: ẩn ô GitHub Repo nếu không yêu cầu
     grace_period_seconds: 5,
@@ -78,10 +78,10 @@ const INITIAL_MOCK_CHECKPOINTS: CheckpointWithSubmission[] = [
     id: 'cp-03',
     order: 3,
     title: 'Checkpoint 3: MVP Hoàn chỉnh & Video Pitch Deck (Chặng cuối)',
-    description: 'Nộp phiên bản sản phẩm hoàn thiện, đường dẫn Live Demo và Slide thuyết trình. Hệ thống sẽ khóa và đóng băng Commit SHA tại thời điểm nộp.',
+    description: 'Nộp phiên bản sản phẩm hoàn thiện, đường dẫn Live Demo, Slide thuyết trình và kho mã nguồn GitHub của sản phẩm.',
     start_time: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
     deadline: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
-    requirements: 'Mã nguồn đầy đủ các tính năng cam kết trên GitHub repository public. Hệ thống sẽ ghi nhận Commit HEAD tại thời điểm nộp bài.',
+    requirements: 'Mã nguồn đầy đủ các tính năng cam kết trên GitHub repository kèm link Live Demo hoặc tài liệu hướng dẫn.',
     is_active: true,
     is_final_checkpoint: true, // Chặng cuối cùng: Bắt buộc GitHub repo & đóng băng Commit SHA
     grace_period_seconds: 5,
@@ -93,7 +93,7 @@ const INITIAL_MOCK_CHECKPOINTS: CheckpointWithSubmission[] = [
         field_key: 'repo_url',
         field_label: 'GitHub Repository URL',
         required: true,
-        apply_sha_freeze: true,
+        apply_sha_freeze: false,
       },
       {
         field_key: 'demo_url',

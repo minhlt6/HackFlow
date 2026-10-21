@@ -262,7 +262,7 @@ export const AdminConfigPage: React.FC = () => {
                     <span className="font-semibold text-foreground">Quy chế nộp bài</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Hệ thống sẽ ghi nhận commit SHA mới nhất trước mốc hạn chót này. Mọi lượt nộp sau hạn chót sẽ bị hệ thống tự động từ chối.
+                    Hệ thống sẽ ghi nhận bản nộp mới nhất của đội thi trước mốc hạn chót này. Mọi lượt nộp sau hạn chót sẽ bị hệ thống tự động từ chối.
                   </p>
                 </div>
               </div>

@@ -33,19 +33,14 @@ IDEMPOTENCY_WINDOW_SECONDS = 10.0
 
 class SubmissionService:
     """
-    Business service layer for Checkpoint Submissions and Audit Logging (HF-34 & SRS HF-23):
+    Business service layer for Checkpoint Submissions and Audit Logging:
     - Enforces Approval Status (`APPROVED` -> else 403 `ACCOUNT_NOT_APPROVED`)
       and Team Leader role (`TEAM_LEADER` -> else 403 `FORBIDDEN_NOT_TEAM_LEADER`).
     - Validates Checkpoint Status (`INVALID_CHECKPOINT_STATUS` 400) and Time-Gated Deadline
       with configurable Grace Period (`DEADLINE_EXCEEDED` 400).
     - Supports Idempotency-Key header & 10-second duplicate request detection (`UAT-CP-09`).
-    - Validates dynamic `submission_fields` (`MISSING_REQUIRED_FIELD` 422).
-    - Records anti-race intermediate status `pending_sha_freeze` with server timestamp
-      before invoking GitHub API (`HF-33`).
-    - Automatically rolls back to previous valid `submitted` record if a resubmission fails
-      due to candidate repo error (`422 GITHUB_REPO_INACCESSIBLE` / `UAT-CP-07`).
-    - Preserves submission on GitHub 503 outage via Graceful Fallback (`sha_verification_failed`, HTTP 200 OK).
-    - Maintains version history on resubmission and writes comprehensive `audit_logs` with `late_grace_period`.
+    - Validates dynamic `submission_fields` (`MISSING_REQUIRED_FIELD` 422) and GitHub repo URL format (`INVALID_GITHUB_URL` 422).
+    - Saves submission directly with status `submitted` and maintains version history & audit logs.
     """
 
     @staticmethod
@@ -192,16 +187,14 @@ class SubmissionService:
         on_pending_sha_freeze: Optional[Callable[[Submission], None]] = None,
     ) -> Tuple[SubmissionResponse, str]:
         """
-        Executes the complete Checkpoint Submission workflow (SRS HF-23 Mục 2, 3, 4, 5, 6):
+        Executes the Checkpoint Submission workflow (Commit SHA mechanism removed):
         1. Verify user is APPROVED (403 ACCOUNT_NOT_APPROVED) and TEAM_LEADER (403 FORBIDDEN_NOT_TEAM_LEADER).
         2. Verify checkpoint status (400 INVALID_CHECKPOINT_STATUS) and deadline + grace period (400 DEADLINE_EXCEEDED).
-        3. Check Idempotency-Key and 10s duplicate detection window (200 OK without re-calling GitHub API).
-        4. Validate dynamic required fields in checkpoint.submission_fields (422 MISSING_REQUIRED_FIELD).
-        5. Record intermediate state `pending_sha_freeze` with `submitted_at = server_timestamp`.
-        6. Call GitHub API (HF-33) if `is_final_checkpoint == True`:
-           - On 422 repo error: rollback to previous `submitted` version if resubmitting, log audit, raise 422.
-           - On 503 GitHub outage after 3 retries: transition to `sha_verification_failed`, log audit, return 200 OK.
-           - On success: freeze `commit_sha`, transition to `submitted`, save version history & audit log, return 200 OK.
+        3. Check Idempotency-Key and 10s duplicate detection window (200 OK).
+        4. Validate dynamic required fields in checkpoint.submission_fields (422 MISSING_REQUIRED_FIELD)
+           and GitHub URL format if repo_url is provided (422 INVALID_GITHUB_URL).
+        5. Directly create or update the Submission with status='submitted', commit_sha=None,
+           save version history & audit log, and return 200 OK.
         """
         # ── Bước 2.1: Kiểm tra trạng thái duyệt tài khoản & Phân quyền Đội trưởng ──
         if user.approval_status != ApprovalStatus.APPROVED.value:
@@ -277,7 +270,6 @@ class SubmissionService:
 
         if existing_sub and existing_sub.status in (
             SubmissionStatus.SUBMITTED.value,
-            SubmissionStatus.SHA_VERIFICATION_FAILED.value,
             SubmissionStatus.EVALUATED.value,
         ):
             # 1. Trùng Idempotency-Key header
@@ -307,10 +299,9 @@ class SubmissionService:
                     "Phát hiện yêu cầu nộp bài trùng lặp trong cửa sổ 10 giây. Hệ thống trả về bản ghi hiện tại.",
                 )
 
-        # ── Bước 2.3: Validate dữ liệu động theo submission_fields ──
+        # ── Bước 2.3: Validate dữ liệu động theo submission_fields & Định dạng GitHub URL ──
         github_service.validate_submission_fields(checkpoint, effective_data)
 
-        # Với checkpoint cuối chưa cấu hình mảng submission_fields tùy chỉnh, bắt buộc phải có repo_url
         if checkpoint.is_final_checkpoint and not checkpoint.submission_fields:
             if not raw_repo_url:
                 raise UnprocessableEntityException(
@@ -319,10 +310,30 @@ class SubmissionService:
                     data={"missing_field": "repo_url"},
                 )
 
-        # ── Bước 2.4: Ghi nhận trạng thái trung gian PENDING_SHA_FREEZE (Chống Race Condition) ──
-        prev_snapshot: Optional[Dict[str, Any]] = None
+        freeze_result = await github_service.process_checkpoint_sha_freeze(
+            checkpoint=checkpoint,
+            submission_data=effective_data,
+            client=github_client,
+        )
+
+        final_repo_url = freeze_result.repo_url or raw_repo_url
+        if final_repo_url:
+            owner, repo = github_service.parse_github_repo_url(final_repo_url)
+            final_repo_url = f"https://github.com/{owner}/{repo}"
+            if "repo_url" in effective_data:
+                effective_data["repo_url"] = final_repo_url
+
+        final_status = SubmissionStatus.SUBMITTED.value
+
+        # ── Hoàn tất lưu trữ, cập nhật Version History & Ghi Audit Log ──
         if existing_sub is not None:
-            prev_snapshot = {
+            prev_version = existing_sub.version or 1
+            history_item = {
+                "id": f"{existing_sub.id}-v{prev_version}",
+                "submission_id": str(existing_sub.id),
+                "version": prev_version,
+                "checkpoint_id": str(checkpoint.id),
+                "team_id": team_id,
                 "submitted_by": existing_sub.submitted_by,
                 "repo_url": existing_sub.repo_url,
                 "demo_url": existing_sub.demo_url,
@@ -331,175 +342,49 @@ class SubmissionService:
                 "note": existing_sub.note,
                 "status": existing_sub.status,
                 "grace_period_applied": bool(existing_sub.grace_period_applied),
-                "version": existing_sub.version or 1,
-                "version_history": copy.deepcopy(existing_sub.version_history or []),
-                "idempotency_key": existing_sub.idempotency_key,
-                "submitted_at": ensure_utc(existing_sub.submitted_at),
+                "submitted_at": ensure_utc(existing_sub.submitted_at).isoformat(),
             }
+            new_version_history = [history_item] + list(existing_sub.version_history or [])
+            new_version = int(prev_version) + 1
+            is_resubmission = True
+
             working_sub = await submission_repo.update(
                 db,
                 existing_sub,
-                status=SubmissionStatus.PENDING_SHA_FREEZE.value,
+                submitted_by=str(user.id),
+                repo_url=final_repo_url,
+                demo_url=raw_demo_url,
+                commit_sha=None,
+                submission_data=effective_data,
+                note=note,
+                status=final_status,
+                grace_period_applied=grace_period_applied,
+                version=new_version,
+                version_history=new_version_history,
+                idempotency_key=clean_idem_key,
                 submitted_at=server_timestamp,
             )
+            audit_action = "SUBMISSION_RESUBMITTED"
         else:
+            new_version = 1
+            is_resubmission = False
             working_sub = await submission_repo.create(
                 db=db,
                 checkpoint_id=str(checkpoint.id),
                 team_id=team_id,
                 submitted_by=str(user.id),
-                repo_url=raw_repo_url,
+                repo_url=final_repo_url,
                 demo_url=raw_demo_url,
                 commit_sha=None,
                 submission_data=effective_data,
                 note=note,
-                status=SubmissionStatus.PENDING_SHA_FREEZE.value,
+                status=final_status,
                 grace_period_applied=grace_period_applied,
                 version=1,
                 version_history=[],
                 idempotency_key=clean_idem_key,
                 submitted_at=server_timestamp,
             )
-
-        if on_pending_sha_freeze is not None:
-            on_pending_sha_freeze(working_sub)
-
-        # ── Gọi Module HF-33 (Nếu is_final_checkpoint = True) & Xử lý Rollback an toàn ──
-        try:
-            freeze_result = await github_service.process_checkpoint_sha_freeze(
-                checkpoint=checkpoint,
-                submission_data=effective_data,
-                client=github_client,
-            )
-        except UnprocessableEntityException as exc:
-            # Kịch bản UAT-FIX-06 / UAT-CP-07:
-            # Nếu đội đã có bài nộp hợp lệ trước đó nhưng lần nộp lại gặp lỗi repo private / không tồn tại / rỗng:
-            # Tự động rollback về phiên bản SUBMITTED hợp lệ trước đó!
-            if prev_snapshot is not None:
-                await submission_repo.update(
-                    db,
-                    working_sub,
-                    submitted_by=prev_snapshot["submitted_by"],
-                    repo_url=prev_snapshot["repo_url"],
-                    demo_url=prev_snapshot["demo_url"],
-                    commit_sha=prev_snapshot["commit_sha"],
-                    submission_data=prev_snapshot["submission_data"],
-                    note=prev_snapshot["note"],
-                    status=prev_snapshot["status"],
-                    grace_period_applied=prev_snapshot["grace_period_applied"],
-                    version=prev_snapshot["version"],
-                    version_history=prev_snapshot["version_history"],
-                    idempotency_key=prev_snapshot["idempotency_key"],
-                    submitted_at=prev_snapshot["submitted_at"],
-                )
-                await submission_repo.create_audit_log(
-                    db=db,
-                    user_id=str(user.id),
-                    team_id=team_id,
-                    checkpoint_id=str(checkpoint.id),
-                    submission_id=str(working_sub.id),
-                    action="SUBMISSION_ROLLBACK_ON_ERROR",
-                    status=prev_snapshot["status"],
-                    ip_address=client_ip,
-                    late_grace_period=grace_period_applied,
-                    commit_sha=prev_snapshot["commit_sha"],
-                    details={
-                        "error_code": exc.error_code,
-                        "error_message": exc.message,
-                        "rolled_back_to_version": prev_snapshot["version"],
-                        "attempted_repo_url": raw_repo_url,
-                        "server_timestamp": server_timestamp.isoformat(),
-                    },
-                )
-                await db.commit()
-                await db.refresh(working_sub)
-
-                exc.data = {
-                    **(exc.data if isinstance(exc.data, dict) else {}),
-                    "rolled_back": True,
-                    "rolled_back_to_version": prev_snapshot["version"],
-                    "preserved_submission_id": str(working_sub.id),
-                    "preserved_status": working_sub.status,
-                    "preserved_commit_sha": working_sub.commit_sha,
-                }
-                raise exc
-            else:
-                # Lần nộp đầu tiên bị lỗi 422 -> xóa bản ghi trung gian PENDING_SHA_FREEZE và ghi log
-                await submission_repo.delete(db, working_sub)
-                await submission_repo.create_audit_log(
-                    db=db,
-                    user_id=str(user.id),
-                    team_id=team_id,
-                    checkpoint_id=str(checkpoint.id),
-                    submission_id=None,
-                    action="SUBMISSION_REJECTED_REPO_ERROR",
-                    status=SubmissionStatus.INVALID.value,
-                    ip_address=client_ip,
-                    late_grace_period=grace_period_applied,
-                    commit_sha=None,
-                    details={
-                        "error_code": exc.error_code,
-                        "error_message": exc.message,
-                        "attempted_repo_url": raw_repo_url,
-                        "server_timestamp": server_timestamp.isoformat(),
-                    },
-                )
-                await db.commit()
-                raise exc
-
-        # ── Bước 2.5 & 4.2: Hoàn tất lưu trữ, cập nhật Version History & Ghi Audit Log ──
-        if prev_snapshot is not None:
-            history_item = {
-                "id": f"{working_sub.id}-v{prev_snapshot['version']}",
-                "submission_id": str(working_sub.id),
-                "version": prev_snapshot["version"],
-                "checkpoint_id": str(checkpoint.id),
-                "team_id": team_id,
-                "submitted_by": prev_snapshot["submitted_by"],
-                "repo_url": prev_snapshot["repo_url"],
-                "demo_url": prev_snapshot["demo_url"],
-                "commit_sha": prev_snapshot["commit_sha"],
-                "submission_data": prev_snapshot["submission_data"],
-                "note": prev_snapshot["note"],
-                "status": prev_snapshot["status"],
-                "grace_period_applied": prev_snapshot["grace_period_applied"],
-                "submitted_at": ensure_utc(prev_snapshot["submitted_at"]).isoformat(),
-            }
-            new_version_history = [history_item] + list(prev_snapshot["version_history"] or [])
-            new_version = int(prev_snapshot["version"]) + 1
-        else:
-            new_version_history = []
-            new_version = 1
-
-        final_repo_url = freeze_result.repo_url or raw_repo_url
-        if final_repo_url and "repo_url" in effective_data:
-            effective_data["repo_url"] = final_repo_url
-
-        final_status = freeze_result.status or SubmissionStatus.SUBMITTED.value
-
-        working_sub = await submission_repo.update(
-            db,
-            working_sub,
-            submitted_by=str(user.id),
-            repo_url=final_repo_url,
-            demo_url=raw_demo_url,
-            commit_sha=freeze_result.commit_sha,
-            submission_data=effective_data,
-            note=note,
-            status=final_status,
-            grace_period_applied=grace_period_applied,
-            version=new_version,
-            version_history=new_version_history,
-            idempotency_key=clean_idem_key,
-            submitted_at=server_timestamp,
-        )
-
-        # Ghi vết vào bảng audit_logs kèm cờ late_grace_period
-        if freeze_result.is_fallback:
-            audit_action = "SUBMISSION_SHA_FALLBACK"
-        elif prev_snapshot is not None:
-            audit_action = "SUBMISSION_RESUBMITTED"
-        else:
             audit_action = "SUBMISSION_CREATED"
 
         await submission_repo.create_audit_log(
@@ -512,19 +397,16 @@ class SubmissionService:
             status=final_status,
             ip_address=client_ip,
             late_grace_period=grace_period_applied,
-            commit_sha=freeze_result.commit_sha,
+            commit_sha=None,
             details={
                 "version": new_version,
-                "is_resubmission": prev_snapshot is not None,
+                "is_resubmission": is_resubmission,
                 "is_final_checkpoint": bool(checkpoint.is_final_checkpoint),
                 "grace_period_applied": grace_period_applied,
                 "grace_period_seconds": grace_sec,
                 "repo_url": final_repo_url,
                 "demo_url": raw_demo_url,
                 "submission_data": effective_data,
-                "retry_attempts": freeze_result.retry_attempts,
-                "is_fallback": freeze_result.is_fallback,
-                "incident_note": freeze_result.incident_note,
                 "server_timestamp": server_timestamp.isoformat(),
             },
         )
@@ -532,14 +414,9 @@ class SubmissionService:
         await db.commit()
         await db.refresh(working_sub)
 
-        if freeze_result.is_fallback:
-            message = (
-                "Bài nộp đã được ghi nhận nhưng không thể lấy Commit SHA do GitHub API gián đoạn. "
-                "BTC sẽ xác thực thủ công."
-            )
-        elif grace_period_applied:
+        if grace_period_applied:
             message = f"Nộp bài thành công trong thời gian ân hạn mạng (Grace Period {grace_sec}s)."
-        elif prev_snapshot is not None:
+        elif is_resubmission:
             message = f"Cập nhật bài nộp (phiên bản v{new_version}) thành công."
         else:
             message = "Nộp bài thành công."
