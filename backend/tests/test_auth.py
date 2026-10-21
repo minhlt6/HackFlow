@@ -260,7 +260,7 @@ async def test_require_approved_protection(client: AsyncClient):
             "email": "judge_approved@example.com",
             "password": "password123",
             "full_name": "Giám Khảo",
-            "role": "judge",
+            "role": "mentor",
         },
     )
     approved_token = admin_res.json()["data"]["access_token"]

@@ -557,7 +557,7 @@ class SubmissionService:
         """
         Lists submissions (and optionally expands version_history rows for HF-31 SubmissionHistoryTable).
         - Candidates automatically view their own team's submissions.
-        - Admin / Judge / Mentor can view all submissions or filter by team_id / checkpoint_id.
+        - Admin / Mentor can view all submissions or filter by team_id / checkpoint_id.
         """
         effective_team_id = team_id
         if user.role == UserRole.CANDIDATE.value:

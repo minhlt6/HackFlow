@@ -5,7 +5,6 @@ from app.api.v1.endpoints import (
     announcements,
     auth,
     checkpoints,
-    evaluations,
     example,
     health,
     leaderboard,
@@ -38,14 +37,6 @@ api_router.include_router(tickets.router, prefix="/tickets", tags=["Support Tick
 # Sprint 4 modules
 api_router.include_router(rubrics.router, prefix="/rubrics", tags=["Rubrics (HF-42)"])
 api_router.include_router(
-    evaluations.router, prefix="/evaluations", tags=["Evaluations & Blind Judging (HF-42)"]
-)
-api_router.include_router(
-    evaluations.admin_evaluations_router,
-    prefix="/admin/evaluations",
-    tags=["Evaluations & Blind Judging (HF-42)"],
-)
-api_router.include_router(
     leaderboard.router, prefix="/leaderboard", tags=["Leaderboard & Results (HF-43)"]
 )
 api_router.include_router(
@@ -53,7 +44,3 @@ api_router.include_router(
     prefix="/admin/leaderboard",
     tags=["Leaderboard & Results (HF-43)"],
 )
-
-
-
-

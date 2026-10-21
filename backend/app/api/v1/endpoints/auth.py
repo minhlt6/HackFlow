@@ -59,7 +59,7 @@ def _build_user_response(user: User) -> UserResponse:
 @router.post(
     "/login",
     response_model=ApiResponse[TokenResponse],
-    summary="Đăng nhập tài khoản nội bộ (Admin/Judge/Mentor)",
+    summary="Đăng nhập tài khoản nội bộ (Admin/Mentor)",
 )
 async def login(
     req: LoginRequest,

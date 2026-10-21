@@ -46,7 +46,7 @@ class AuthService:
         cls, db: AsyncSession, email: str, password: str
     ) -> Tuple[User, str]:
         """
-        Authenticate local accounts (Admin, Judge, Mentor, or local Candidate)
+        Authenticate local accounts (Admin, Mentor, or local Candidate)
         using email and password.
         """
         user = await user_repo.get_by_email(db, email)

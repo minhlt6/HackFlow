@@ -11,7 +11,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="Email tài khoản")
     password: str = Field(..., min_length=6, description="Mật khẩu tối thiểu 6 ký tự")
     full_name: str = Field(..., min_length=2, description="Họ và tên đầy đủ")
-    role: Optional[str] = Field("candidate", description="Vai trò: candidate, judge, mentor, admin")
+    role: Optional[str] = Field("candidate", description="Vai trò: candidate, mentor, admin")
 
 
 class UserResponse(BaseModel):

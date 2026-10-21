@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    JUDGE = "judge"
     CANDIDATE = "candidate"
     MENTOR = "mentor"
 

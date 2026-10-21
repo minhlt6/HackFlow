@@ -39,7 +39,6 @@ async def _seed_default_accounts() -> None:
     default_users = [
         ("admin@hackflow.dev", "BTC HackFlow Administrator", "admin", "approved", "admin-dev"),
         ("admin@hackflow.com", "Admin HackFlow", "admin", "approved", "admin-com"),
-        ("judge.tech@hackathon.org", "TS. Nguyễn Hoàng Giám Khảo", "judge", "approved", "judge-hf"),
         ("mentor.ai@ailab.org.vn", "ThS. Phạm Cố Vấn AI", "mentor", "approved", "mentor-hf"),
         ("leader@cybersamurai.team", "Nguyễn Văn Minh", "candidate", "approved", "leader-cyber"),
         ("member@cybersamurai.team", "Trần Thị Thảo", "candidate", "approved", "member-cyber"),
@@ -316,15 +315,14 @@ Toàn bộ phản hồi HTTP (cả 2xx thành công lẫn 4xx/5xx lỗi) đều 
 - **Cơ chế xác thực**: JSON Web Token (JWT) theo chuẩn RFC 7519.
 - **Header gửi kèm**: `Authorization: Bearer <access_token>`
 - **Phương thức đăng nhập**:
-  - Email + Password nội bộ (cho Admin, Judge, Mentor)
+  - Email + Password nội bộ (cho Admin, Mentor)
   - GitHub OAuth 2.0 (dành cho Thí sinh - Candidate)
 - **Trạng thái phê duyệt (Approval Status)**:
   - `pending`: Thí sinh mới đăng ký, chờ BTC phê duyệt.
   - `approved`: Đã được duyệt hoặc có trong Whitelist, toàn quyền tạo đội & chọn đề tài.
   - `rejected`: Đơn đăng ký bị từ chối.
 - **Vai trò người dùng (Roles)**:
-  - `admin`: Ban Tổ Chức (toàn quyền quản lý Whitelist, duyệt thí sinh, cấu hình đề tài).
-  - `judge`: Giám khảo chấm thi.
+  - `admin`: Ban Tổ Chức (toàn quyền quản lý Whitelist, duyệt thí sinh, cấu hình đề tài, tiêu chí và bảng xếp hạng).
   - `mentor`: Cố vấn hướng dẫn.
   - `candidate`: Thí sinh thi đấu (Leader / Member).
 
