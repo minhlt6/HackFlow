@@ -67,6 +67,10 @@ class TeamResponse(BaseModel):
     topic_id: Optional[str] = None
     topic_name: Optional[str] = None
     subtopic_id: Optional[str] = None
+    room_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    is_zone_winner: bool = False
+    is_room_winner: bool = False
     members: List[TeamMemberResponse] = []
     created_at: Optional[datetime] = None
 

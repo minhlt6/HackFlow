@@ -37,13 +37,17 @@ class CheckpointService:
     def calculate_time_gate_info(
         checkpoint: Checkpoint,
         now: Optional[datetime] = None,
+        override_start_time: Optional[datetime] = None,
+        override_deadline: Optional[datetime] = None,
+        override_is_active: Optional[bool] = None,
     ) -> dict:
         """
         Tính toán trạng thái time-gated của một Checkpoint tại thời điểm 'now'.
         """
         current_time = ensure_utc(now or datetime.now(timezone.utc))
-        start_time = ensure_utc(checkpoint.start_time)
-        deadline = ensure_utc(checkpoint.deadline)
+        start_time = ensure_utc(override_start_time if override_start_time is not None else checkpoint.start_time)
+        deadline = ensure_utc(override_deadline if override_deadline is not None else checkpoint.deadline)
+        effective_is_active = bool(override_is_active if override_is_active is not None else checkpoint.is_active)
         grace_sec = getattr(checkpoint, "grace_period_seconds", GRACE_PERIOD_SECONDS)
         if grace_sec is None:
             grace_sec = GRACE_PERIOD_SECONDS
@@ -54,7 +58,7 @@ class CheckpointService:
         time_until_start_sec = max(0, int((start_time - current_time).total_seconds()))
 
         # 1. Ban tổ chức khóa checkpoint
-        if not checkpoint.is_active:
+        if not effective_is_active:
             return {
                 "status": CheckpointStatus.CLOSED.value,
                 "is_open": False,
@@ -141,6 +145,9 @@ class CheckpointService:
     def validate_checkpoint_submission_window(
         checkpoint: Checkpoint,
         now: Optional[datetime] = None,
+        override_start_time: Optional[datetime] = None,
+        override_deadline: Optional[datetime] = None,
+        override_is_active: Optional[bool] = None,
     ) -> Tuple[bool, bool, str]:
         """
         Kiểm tra nghiêm ngặt time-gated cho việc nộp bài:
@@ -150,10 +157,17 @@ class CheckpointService:
           + now > deadline + grace_period -> DEADLINE_EXCEEDED
         - Trả về (is_valid=True, grace_period_applied=bool, message=str) nếu hợp lệ.
         """
-        info = CheckpointService.calculate_time_gate_info(checkpoint, now)
+        effective_is_active = bool(override_is_active if override_is_active is not None else checkpoint.is_active)
+        info = CheckpointService.calculate_time_gate_info(
+            checkpoint,
+            now,
+            override_start_time=override_start_time,
+            override_deadline=override_deadline,
+            override_is_active=override_is_active,
+        )
         grace_sec = info.get("grace_period_seconds", GRACE_PERIOD_SECONDS)
 
-        if not checkpoint.is_active:
+        if not effective_is_active:
             raise ForbiddenException(
                 message="Checkpoint này đang tạm khóa hoặc đã bị vô hiệu hóa bởi Ban tổ chức.",
                 error_code="CHECKPOINT_INACTIVE",
@@ -178,9 +192,18 @@ class CheckpointService:
         cls,
         checkpoint: Checkpoint,
         now: Optional[datetime] = None,
+        override_start_time: Optional[datetime] = None,
+        override_deadline: Optional[datetime] = None,
+        override_is_active: Optional[bool] = None,
         latest_submission: Optional[dict] = None,
     ) -> CheckpointResponse:
-        info = cls.calculate_time_gate_info(checkpoint, now)
+        info = cls.calculate_time_gate_info(
+            checkpoint,
+            now,
+            override_start_time=override_start_time,
+            override_deadline=override_deadline,
+            override_is_active=override_is_active,
+        )
         return CheckpointResponse(
             id=str(checkpoint.id),
             title=checkpoint.title,
@@ -208,8 +231,17 @@ class CheckpointService:
         cls,
         checkpoint: Checkpoint,
         now: Optional[datetime] = None,
+        override_start_time: Optional[datetime] = None,
+        override_deadline: Optional[datetime] = None,
+        override_is_active: Optional[bool] = None,
     ) -> CheckpointTimeGatedStatusResponse:
-        info = cls.calculate_time_gate_info(checkpoint, now)
+        info = cls.calculate_time_gate_info(
+            checkpoint,
+            now,
+            override_start_time=override_start_time,
+            override_deadline=override_deadline,
+            override_is_active=override_is_active,
+        )
         return CheckpointTimeGatedStatusResponse(
             checkpoint_id=str(checkpoint.id),
             title=checkpoint.title,
@@ -233,6 +265,9 @@ class CheckpointService:
         db: AsyncSession,
         only_active: bool = False,
         now: Optional[datetime] = None,
+        override_start_time: Optional[datetime] = None,
+        override_deadline: Optional[datetime] = None,
+        override_is_active: Optional[bool] = None,
         user_id: Optional[str] = None,
     ) -> List[CheckpointResponse]:
         checkpoints = await checkpoint_repo.get_all(db, only_active=only_active)
@@ -264,6 +299,9 @@ class CheckpointService:
         db: AsyncSession,
         checkpoint_id: str,
         now: Optional[datetime] = None,
+        override_start_time: Optional[datetime] = None,
+        override_deadline: Optional[datetime] = None,
+        override_is_active: Optional[bool] = None,
         user_id: Optional[str] = None,
     ) -> CheckpointResponse:
         cp = await checkpoint_repo.get_by_id(db, checkpoint_id)
@@ -294,6 +332,9 @@ class CheckpointService:
         db: AsyncSession,
         checkpoint_id: str,
         now: Optional[datetime] = None,
+        override_start_time: Optional[datetime] = None,
+        override_deadline: Optional[datetime] = None,
+        override_is_active: Optional[bool] = None,
     ) -> CheckpointTimeGatedStatusResponse:
         cp = await checkpoint_repo.get_by_id(db, checkpoint_id)
         if not cp:

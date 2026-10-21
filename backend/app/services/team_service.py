@@ -94,6 +94,10 @@ class TeamService:
             topic_id=str(team.topic_id) if team.topic_id else None,
             topic_name=topic_name,
             subtopic_id=str(team.subtopic_id) if team.subtopic_id else None,
+            room_id=str(team.room_id) if getattr(team, "room_id", None) else None,
+            zone_id=str(team.zone_id) if getattr(team, "zone_id", None) else None,
+            is_zone_winner=bool(getattr(team, "is_zone_winner", False)),
+            is_room_winner=bool(getattr(team, "is_room_winner", False)),
             members=members_resp,
             created_at=team.created_at,
         )

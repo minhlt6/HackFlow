@@ -9,6 +9,13 @@ from app.models.support import SupportTicket, TicketStatus, TicketPriority
 from app.models.config import HackathonConfig
 from app.models.whitelist import WhitelistEntry
 from app.models.announcement import Announcement, AnnouncementPriority
+from app.models.room import (
+    JudgingStage,
+    Room,
+    Zone,
+    RoomCheckpointSchedule,
+    PeerEvaluation,
+)
 
 __all__ = [
     "Base",
@@ -38,7 +45,9 @@ __all__ = [
     "WhitelistEntry",
     "Announcement",
     "AnnouncementPriority",
+    "JudgingStage",
+    "Room",
+    "Zone",
+    "RoomCheckpointSchedule",
+    "PeerEvaluation",
 ]
-
-
-

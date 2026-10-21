@@ -238,6 +238,55 @@ async def _seed_default_accounts() -> None:
                             )
                         )
 
+        from datetime import datetime, timezone
+        from app.models.room import JudgingStage, Room, Zone
+
+        room_count = (await session.execute(select(func.count(Room.id)))).scalar() or 0
+        if room_count == 0:
+            admin_user = user_by_email.get("admin@hackflow.dev")
+            r1 = Room(
+                id="room-ca-1",
+                code="AI-TC-CA1",
+                name="Lớp AI Thực Chiến - Ca Sáng (Phòng 301)",
+                description="Khung giờ 08:00 - 12:00 | Sức chứa 45 học viên | Chia 3 Zone chấm chéo",
+                manager_id=str(admin_user.id) if admin_user else None,
+                manager_name="TS. Lê Tiến Minh (Quản lý Ca Sáng)",
+                capacity=45,
+                start_time=datetime(2026, 4, 15, 8, 0, tzinfo=timezone.utc),
+                end_time=datetime(2026, 4, 15, 12, 0, tzinfo=timezone.utc),
+                judging_stage=JudgingStage.STAGE_1_ZONE.value,
+                room_top_n=1,
+                is_active=True,
+            )
+            r2 = Room(
+                id="room-ca-2",
+                code="AI-TC-CA2",
+                name="Lớp AI Thực Chiến - Ca Chiều (Phòng 402)",
+                description="Khung giờ 13:30 - 17:30 | Sức chứa 60 học viên | Chia 3 Zone chấm chéo",
+                manager_id=str(admin_user.id) if admin_user else None,
+                manager_name="ThS. Trần Thùy Linh (Quản lý Ca Chiều)",
+                capacity=60,
+                start_time=datetime(2026, 4, 15, 13, 30, tzinfo=timezone.utc),
+                end_time=datetime(2026, 4, 15, 17, 30, tzinfo=timezone.utc),
+                judging_stage=JudgingStage.STAGE_1_ZONE.value,
+                room_top_n=3,
+                is_active=True,
+            )
+            session.add_all([r1, r2])
+            await session.flush()
+
+            z1a = Zone(id="zone-ca1-a", room_id="room-ca-1", code="ZONE-A", name="Zone A (Bàn 1-3)", max_teams=4)
+            z1b = Zone(id="zone-ca1-b", room_id="room-ca-1", code="ZONE-B", name="Zone B (Bàn 4-6)", max_teams=4)
+            z1c = Zone(id="zone-ca1-c", room_id="room-ca-1", code="ZONE-C", name="Zone C (Bàn 7-9)", max_teams=4)
+            z2a = Zone(id="zone-ca2-a", room_id="room-ca-2", code="ZONE-A", name="Zone A (Khu Đông)", max_teams=5)
+            z2b = Zone(id="zone-ca2-b", room_id="room-ca-2", code="ZONE-B", name="Zone B (Khu Tây)", max_teams=5)
+            session.add_all([z1a, z1b, z1c, z2a, z2b])
+            await session.flush()
+
+            if cs_team:
+                cs_team.room_id = "room-ca-1"
+                cs_team.zone_id = "zone-ca1-a"
+
         await session.commit()
 
 

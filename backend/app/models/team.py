@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.topic import Topic, Subtopic
     from app.models.checkpoint import Submission
     from app.models.support import SupportTicket
+    from app.models.room import Room, Zone
 
 
 class TeamMemberRole(str, Enum):
@@ -21,6 +22,7 @@ class TeamMemberRole(str, Enum):
 class Team(BaseModel):
     """
     Hackathon competition team model.
+    Supports AI Thực Chiến room & zone assignment and 3-stage progression flags.
     """
     __tablename__ = "teams"
 
@@ -32,6 +34,14 @@ class Team(BaseModel):
     subtopic_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("subtopics.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    room_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    zone_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("zones.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    is_zone_winner: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_room_winner: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Relationships
@@ -43,6 +53,12 @@ class Team(BaseModel):
     )
     subtopic: Mapped[Optional["Subtopic"]] = relationship(
         foreign_keys=[subtopic_id], back_populates="teams"
+    )
+    room: Mapped[Optional["Room"]] = relationship(
+        foreign_keys=[room_id], back_populates="teams"
+    )
+    zone: Mapped[Optional["Zone"]] = relationship(
+        foreign_keys=[zone_id], back_populates="teams"
     )
     submissions: Mapped[List["Submission"]] = relationship(
         back_populates="team", cascade="all, delete-orphan"
