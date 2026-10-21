@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class VerifyGitHubRepoRequest(BaseModel):
     """
-    Request model for inspecting public GitHub repository and latest HEAD commit.
+    Request model for validating GitHub repository URL.
     """
     repo_url: str = Field(
         ...,
@@ -17,55 +17,55 @@ class VerifyGitHubRepoRequest(BaseModel):
     branch: Optional[str] = Field(
         None,
         max_length=64,
-        description="Tên nhánh cần lấy SHA (tùy chọn). Mặc định lấy commit HEAD của default branch.",
+        description="Tên nhánh (tùy chọn).",
     )
 
 
 class VerifyGitHubRepoResponse(BaseModel):
     """
-    Response model returning extracted commit metadata and verification status.
+    Response model returning validated GitHub repository metadata.
     """
     repo_url: str
     owner: str
     repo: str
     branch: Optional[str] = None
     commit_sha: Optional[str] = Field(
-        None, description="Mã hash SHA-1 40 ký tự của commit HEAD mới nhất"
+        None, description="Trường lưu trữ tương thích ngược (luôn là None sau khi bỏ cơ chế Commit SHA)"
     )
-    commit_message: Optional[str] = Field(None, description="Tiêu đề commit mới nhất")
-    author: Optional[str] = Field(None, description="Tên tác giả commit")
-    committed_at: Optional[datetime] = Field(None, description="Thời điểm commit chuẩn UTC")
-    html_url: Optional[str] = Field(None, description="Link xem commit trực tiếp trên GitHub")
+    commit_message: Optional[str] = Field(None, description="Tiêu đề commit (nếu có)")
+    author: Optional[str] = Field(None, description="Tên tác giả (nếu có)")
+    committed_at: Optional[datetime] = Field(None, description="Thời điểm (nếu có)")
+    html_url: Optional[str] = Field(None, description="Link repository trên GitHub")
     status: str = Field(
         "submitted",
-        description="Trạng thái xác thực theo SRS HF-23: 'submitted' | 'sha_verification_failed'",
+        description="Trạng thái xác thực: 'submitted'",
     )
     error_code: Optional[str] = Field(
         None,
-        description="Mã lỗi nghiệp vụ nếu kích hoạt fallback (vd: 'GITHUB_API_UNAVAILABLE')",
+        description="Mã lỗi nghiệp vụ (nếu có)",
     )
     retry_attempts: int = Field(
-        1,
-        ge=1,
-        description="Số lần đã gọi thử GitHub REST API (tối đa 3 lần khi gặp sự cố mạng/5xx/rate-limit)",
+        0,
+        ge=0,
+        description="Số lần gọi thử API (0 khi chỉ kiểm tra định dạng URL nội bộ)",
     )
-    is_verified: bool = Field(..., description="True nếu xác thực SHA thành công")
+    is_verified: bool = Field(..., description="True nếu xác thực định dạng URL hợp lệ")
     is_fallback: bool = Field(
         False,
-        description="True nếu GitHub API gặp sự cố và kích hoạt Graceful Fallback chuyển sang đối soát thủ công",
+        description="Cờ tương thích ngược",
     )
     message: str = Field(..., description="Thông báo chi tiết kết quả xác thực")
 
 
 class GitHubFreezeResult(BaseModel):
     """
-    Internal result schema used by Checkpoint & Submission services (HF-33 / HF-34).
+    Internal result schema used by Checkpoint & Submission services.
     """
-    freeze_required: bool
-    should_freeze: bool
+    freeze_required: bool = False
+    should_freeze: bool = False
     commit_sha: Optional[str] = None
     repo_url: Optional[str] = None
-    status: str
+    status: str = "submitted"
     error_code: Optional[str] = None
     commit_message: Optional[str] = None
     author: Optional[str] = None

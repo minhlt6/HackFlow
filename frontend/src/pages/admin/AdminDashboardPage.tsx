@@ -190,7 +190,7 @@ export const AdminDashboardPage: React.FC = () => {
         <StatCard
           title="Bài nộp các chặng"
           value={submissions.length}
-          subtitle="Tổng số Commit SHA đã chốt"
+          subtitle="Tổng số lượt nộp bài đã ghi nhận"
           icon={<CheckSquare size={20} />}
           iconColor="emerald"
           onClick={() => navigate('/admin/checkpoints')}

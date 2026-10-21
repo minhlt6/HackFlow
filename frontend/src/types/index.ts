@@ -114,7 +114,7 @@ export interface CheckpointSubmission {
   figmaUrl?: string;
   description?: string;
   customFields?: Record<string, string>;
-  commitSha: string;
+  commitSha?: string;
   submittedAt: string;
   isAfterDeadline?: boolean;
   score?: number;
@@ -145,7 +145,7 @@ export interface FinalSubmission {
   demoVideoUrl: string;
   slideUrl: string;
   summary: string;
-  commitSha: string;
+  commitSha?: string;
   submittedAt: string;
   isLate?: boolean;
   status?: 'submitted' | 'scored';

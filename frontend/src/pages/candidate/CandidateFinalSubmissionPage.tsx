@@ -8,7 +8,6 @@ import {
   Video,
   Presentation,
   FileCode,
-  GitCommit,
   ExternalLink,
   ShieldCheck,
   AlertCircle,
@@ -36,7 +35,7 @@ export const CandidateFinalSubmissionPage: React.FC = () => {
   );
   const [confirmLock, setConfirmLock] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successSha, setSuccessSha] = useState<string | null>(null);
+  const [isSubmittedSuccess, setIsSubmittedSuccess] = useState<boolean>(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +46,7 @@ export const CandidateFinalSubmissionPage: React.FC = () => {
       const res = submitFinalProject(myTeam.id, repoUrl, demoVideoUrl, slideUrl, summary);
       setIsSubmitting(false);
       if (res.success) {
-        setSuccessSha(res.commitSha);
+        setIsSubmittedSuccess(true);
       }
     }, 600);
   };
@@ -88,8 +87,8 @@ export const CandidateFinalSubmissionPage: React.FC = () => {
         </div>
       )}
 
-      {existingFinal || successSha ? (
-        /* Submitted View with Frozen SHA */
+      {existingFinal || isSubmittedSuccess ? (
+        /* Submitted View */
         <div className="rounded-[16px] border border-emerald-500/40 bg-card p-6 lg:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
             <div className="flex items-center gap-3">
@@ -109,23 +108,6 @@ export const CandidateFinalSubmissionPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Badge variant="success">Trạng thái: Đã Chốt Bài Nộp</Badge>
             </div>
-          </div>
-
-          {/* Frozen Commit SHA Badge */}
-          <div className="rounded-[12px] bg-muted/40 dark:bg-slate-900/60 border border-border p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-semibold tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <GitCommit size={15} className="text-primary" />
-                <span>Mã băm commit đóng băng an toàn</span>
-              </span>
-              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">Bảo vệ tính toàn vẹn</span>
-            </div>
-            <div className="font-mono text-base font-bold text-foreground bg-muted/40 dark:bg-slate-900/60 p-3 rounded-[8px] border border-border overflow-x-auto text-emerald-700 dark:text-emerald-400">
-              {existingFinal?.commitSha || successSha}
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Giám khảo sẽ chỉ đánh giá mã nguồn tại chính xác commit hash này. Mọi thay đổi sau thời điểm nộp sẽ không được tính.
-            </p>
           </div>
 
           {/* Submission Details Summary */}
@@ -237,7 +219,7 @@ export const CandidateFinalSubmissionPage: React.FC = () => {
                 <span>Cảnh báo trước khi nộp bài:</span>
               </div>
               <p>
-                Sau khi nhấn Nộp bài chung cuộc, hệ thống sẽ thực hiện chốt commit SHA tự động. Sau thời hạn{' '}
+                Sau khi nhấn Nộp bài chung cuộc, hệ thống sẽ ghi nhận đường dẫn sản phẩm chính thức của đội. Sau thời hạn{' '}
                 <strong>{new Date(config.finalSubmissionDeadline).toLocaleString('vi-VN')}</strong>, mọi thao tác chỉnh sửa hoặc nộp lại sẽ bị vô hiệu hóa hoàn toàn.
               </p>
             </div>

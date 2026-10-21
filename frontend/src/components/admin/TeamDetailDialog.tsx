@@ -144,11 +144,6 @@ export const TeamDetailDialog: React.FC<TeamDetailDialogProps> = ({
                     <ExternalLink size={11} />
                   </a>
                 </div>
-                {team.latestCommitSha && (
-                  <Badge variant="outline" className="font-mono text-[11px]">
-                    SHA: {team.latestCommitSha.slice(0, 7)}
-                  </Badge>
-                )}
               </div>
             )}
           </div>

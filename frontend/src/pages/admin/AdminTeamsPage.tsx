@@ -14,7 +14,6 @@ import {
   XCircle,
   Trash2,
   Crown,
-  GitCommit,
   SlidersHorizontal,
 } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -204,12 +203,6 @@ export const AdminTeamsPage: React.FC = () => {
               <span className="rounded bg-muted px-1.5 py-0.5 font-mono font-medium text-foreground border border-border">
                 {row.inviteCode}
               </span>
-              {row.latestCommitSha && (
-                <span className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                  <GitCommit size={11} className="text-primary shrink-0" />
-                  {row.latestCommitSha.slice(0, 7)}
-                </span>
-              )}
             </div>
           </div>
         ),

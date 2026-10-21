@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   History,
-  GitCommit,
   Globe,
   ExternalLink,
   Clock,
@@ -9,15 +8,12 @@ import {
   FileText,
   MessageSquare,
   ShieldCheck,
-  AlertTriangle,
   AlertCircle,
   Inbox,
 } from 'lucide-react';
 import { Badge } from './Badge';
 import {
   type Submission,
-  formatCommitSha,
-  getCommitUrl,
   formatSubmissionTime,
   getSubmissionStatusMeta,
 } from '../types/checkpoint';
@@ -70,7 +66,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Sắp xếp danh sách nộp bài theo thời gian submitted_at giảm dần (Mới nhất lên đầu) (HF-31 Review Lỗi 2)
+  // Sắp xếp danh sách nộp bài theo thời gian submitted_at giảm dần (Mới nhất lên đầu)
   const sortedSubmissions = useMemo(() => {
     return [...submissions].sort((a, b) => {
       const timeA = new Date(a.submitted_at).getTime() || 0;
@@ -129,7 +125,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
           <p className="text-xs">Đang tải lịch sử các lần nộp bài...</p>
         </div>
       ) : errorMessage ? (
-        /* Trạng thái Lỗi API thật kèm nút Thử lại (HF-31 Review Lỗi 1) */
+        /* Trạng thái Lỗi API thật kèm nút Thử lại */
         <div className="p-10 text-center flex flex-col items-center justify-center gap-3">
           <div className="p-3 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30">
             <AlertCircle size={26} />
@@ -178,10 +174,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                 <th scope="col" className="py-3 px-4 min-w-[160px]">
                   Thời gian nộp
                 </th>
-                <th scope="col" className="py-3 px-4 min-w-[140px]">
-                  Commit SHA
-                </th>
-                <th scope="col" className="py-3 px-4 min-w-[180px]">
+                <th scope="col" className="py-3 px-4 min-w-[200px]">
                   Tài nguyên nộp
                 </th>
                 <th scope="col" className="py-3 px-4 min-w-[130px]">
@@ -195,12 +188,9 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
             <tbody className="divide-y divide-border">
               {sortedSubmissions.map((sub, index) => {
                 const isLatest = index === 0;
-                // Phiên bản tăng dần theo thứ tự thời gian: bản cũ nhất là v1, bản mới nhất là vN
                 const versionNumber = sortedSubmissions.length - index;
                 const timeInfo = formatSubmissionTime(sub.submitted_at);
                 const statusMeta = getSubmissionStatusMeta(sub.status, isFinalCheckpoint);
-                const shortSha = formatCommitSha(sub.commit_sha);
-                const commitUrl = getCommitUrl(sub.repo_url, sub.commit_sha);
 
                 return (
                   <tr
@@ -221,7 +211,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Cột 2: Thời gian nộp (HF-31 AC-3) */}
+                    {/* Cột 2: Thời gian nộp */}
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
@@ -240,55 +230,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Cột 3: Commit SHA (HF-31 AC-2 & Review Lỗi 3) */}
-                    <td className="py-3.5 px-4">
-                      {sub.commit_sha ? (
-                        commitUrl ? (
-                          <a
-                            href={commitUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`Xem commit ${sub.commit_sha} trên GitHub (Click để mở tab mới)`}
-                            className="inline-flex items-center gap-1.5 font-mono text-xs px-2.5 py-1 rounded-[8px] bg-muted/40 dark:bg-slate-900/60 hover:bg-accent text-primary hover:text-foreground border border-border hover:border-[#6366F1] transition-all group shadow-sm"
-                          >
-                            <GitCommit size={13} className="text-emerald-700 dark:text-emerald-400 shrink-0" />
-                            <span className="font-semibold">{shortSha}</span>
-                            <ExternalLink
-                              size={11}
-                              className="text-muted-foreground group-hover:text-indigo-300 transition-colors"
-                            />
-                          </a>
-                        ) : (
-                          <span
-                            title={sub.commit_sha}
-                            className="inline-flex items-center gap-1.5 font-mono text-xs px-2.5 py-1 rounded-[8px] bg-muted/40 dark:bg-slate-900/60 text-primary border border-border"
-                          >
-                            <GitCommit size={13} className="text-emerald-700 dark:text-emerald-400 shrink-0" />
-                            <span className="font-semibold">{shortSha}</span>
-                          </span>
-                        )
-                      ) : statusMeta.normalizedStatus === 'pending_sha_freeze' ? (
-                        <span className="inline-flex items-center gap-1 text-primary text-[11px] font-medium">
-                          <RefreshCw size={11} className="animate-spin text-primary shrink-0" />
-                          <span>Đang lấy SHA...</span>
-                        </span>
-                      ) : statusMeta.normalizedStatus === 'sha_verification_failed' ? (
-                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 text-[11px] font-medium">
-                          <AlertTriangle size={12} className="shrink-0 text-amber-700 dark:text-amber-400" />
-                          <span>Chờ xác minh</span>
-                        </span>
-                      ) : isFinalCheckpoint ? (
-                        <span className="text-muted-foreground font-mono text-xs italic">
-                          - (Chưa có SHA)
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground font-mono text-xs italic">
-                          - (Chặng tiến độ)
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Cột 4: Tài nguyên nộp (Repo, Demo URL & Các link từ submission_data - Review Lỗi 3) */}
+                    {/* Cột 3: Tài nguyên nộp (Repo, Demo URL & Các link từ submission_data) */}
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-1.5">
                         {sub.repo_url && (
@@ -296,7 +238,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                             href={sub.repo_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-foreground hover:text-indigo-300 transition-colors truncate max-w-[200px]"
+                            className="inline-flex items-center gap-1.5 text-foreground hover:text-indigo-300 transition-colors truncate max-w-[220px]"
                             title={`GitHub Repo: ${sub.repo_url}`}
                           >
                             <GithubIcon size={13} className="shrink-0 text-muted-foreground" />
@@ -310,7 +252,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                             href={sub.demo_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-sky-700 dark:text-cyan-400 hover:text-cyan-200 transition-colors truncate max-w-[200px]"
+                            className="inline-flex items-center gap-1.5 text-sky-700 dark:text-cyan-400 hover:text-cyan-200 transition-colors truncate max-w-[220px]"
                             title={`Demo / Báo cáo: ${sub.demo_url}`}
                           >
                             <Globe size={13} className="shrink-0 text-sky-700 dark:text-cyan-400" />
@@ -337,7 +279,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                                 href={val}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-primary hover:text-indigo-200 transition-colors truncate max-w-[200px]"
+                                className="inline-flex items-center gap-1.5 text-primary hover:text-indigo-200 transition-colors truncate max-w-[220px]"
                                 title={`${label}: ${val}`}
                               >
                                 <Globe size={13} className="shrink-0 text-primary" />
@@ -353,7 +295,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Cột 5: Trạng thái bài nộp (Badge SRS HF-23) */}
+                    {/* Cột 4: Trạng thái bài nộp */}
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-1 items-start">
                         <Badge variant={statusMeta.badgeVariant} size="sm">
@@ -367,7 +309,7 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Cột 6: Ghi chú & Đánh giá/Feedback */}
+                    {/* Cột 5: Ghi chú & Đánh giá/Feedback */}
                     <td className="py-3.5 px-4">
                       <div className="space-y-1 max-w-[240px]">
                         {sub.note && (
@@ -397,5 +339,3 @@ export const SubmissionHistoryTable: React.FC<SubmissionHistoryTableProps> = ({
     </div>
   );
 };
-
-export default SubmissionHistoryTable;

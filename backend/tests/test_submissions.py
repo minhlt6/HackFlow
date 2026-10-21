@@ -1,20 +1,14 @@
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
-from app.models.checkpoint import AuditLog, Checkpoint, Submission, SubmissionStatus
+from app.models.checkpoint import AuditLog, Checkpoint, Submission
 from app.models.team import Team, TeamMember, TeamMemberRole
 from app.models.user import ApprovalStatus, User, UserRole
-from app.schemas.github import VerifyGitHubRepoResponse
-from app.services.github_service import github_service
 from tests.conftest import TestSessionLocal
-
-SAMPLE_SHA_V1 = "1111111111111111111111111111111111111111"
-SAMPLE_SHA_V2 = "2222222222222222222222222222222222222222"
 
 
 async def setup_team_and_users(db: AsyncSession):
@@ -107,30 +101,11 @@ async def setup_team_and_users(db: AsyncSession):
     return team, tokens
 
 
-def make_mock_verify_response(sha: str = SAMPLE_SHA_V1, repo_url: str = "https://github.com/alpha/hackflow"):
-    return VerifyGitHubRepoResponse(
-        repo_url=repo_url,
-        owner="alpha",
-        repo="hackflow",
-        branch="main",
-        commit_sha=sha,
-        commit_message="feat: complete final MVP",
-        author="Team Leader",
-        committed_at=datetime.now(timezone.utc),
-        html_url=f"{repo_url}/commit/{sha}",
-        status=SubmissionStatus.SUBMITTED.value,
-        error_code=None,
-        retry_attempts=1,
-        is_verified=True,
-        is_fallback=False,
-        message=f"Xác thực commit HEAD thành công: {sha[:7]}",
-    )
+# ─── UAT-CP-01: Nộp bài thành công trước deadline (Checkpoint cuối) ───
 
-
-# ─── UAT-CP-01 & UAT-FIX-08: Nộp bài thành công trước deadline (Checkpoint cuối) ───
 
 @pytest.mark.asyncio
-async def test_uat_cp_01_submit_final_checkpoint_success_with_sha_freeze(client: AsyncClient):
+async def test_uat_cp_01_submit_final_checkpoint_success(client: AsyncClient):
     async with TestSessionLocal() as session:
         team, tokens = await setup_team_and_users(session)
         now = datetime.now(timezone.utc)
@@ -146,7 +121,7 @@ async def test_uat_cp_01_submit_final_checkpoint_success_with_sha_freeze(client:
                     "field_key": "repo_url",
                     "field_label": "GitHub Repository URL",
                     "required": True,
-                    "apply_sha_freeze": True,
+                    "apply_sha_freeze": False,
                 },
                 {
                     "field_key": "demo_url",
@@ -161,23 +136,18 @@ async def test_uat_cp_01_submit_final_checkpoint_success_with_sha_freeze(client:
         await session.refresh(cp)
         cp_id = str(cp.id)
 
-    with patch.object(
-        github_service,
-        "fetch_head_commit",
-        new=AsyncMock(return_value=make_mock_verify_response(SAMPLE_SHA_V1)),
-    ) as mock_gh:
-        res = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {
-                    "repo_url": "https://github.com/alpha/hackflow.git",
-                    "demo_url": "https://alpha-demo.vercel.app",
-                },
-                "note": "Bản nộp MVP hoàn chỉnh",
+    res = await client.post(
+        "/api/v1/submissions",
+        headers={"Authorization": f"Bearer {tokens['leader']}"},
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {
+                "repo_url": "https://github.com/alpha/hackflow.git",
+                "demo_url": "https://alpha-demo.vercel.app",
             },
-        )
+            "note": "Bản nộp MVP hoàn chỉnh",
+        },
+    )
 
     assert res.status_code == 200
     body = res.json()
@@ -186,22 +156,26 @@ async def test_uat_cp_01_submit_final_checkpoint_success_with_sha_freeze(client:
     assert data["checkpoint_id"] == cp_id
     assert data["team_id"] == str(team.id)
     assert data["status"] == "submitted"
-    assert data["commit_sha"] == SAMPLE_SHA_V1
+    assert data["commit_sha"] is None
     assert data["repo_url"] == "https://github.com/alpha/hackflow"
     assert data["grace_period_applied"] is False
     assert data["version"] == 1
-    assert mock_gh.await_count == 1
 
     # Kiểm tra bản ghi Audit Log trong DB
     async with TestSessionLocal() as session:
-        logs = (await session.execute(select(AuditLog).where(AuditLog.checkpoint_id == cp_id))).scalars().all()
+        logs = (
+            (await session.execute(select(AuditLog).where(AuditLog.checkpoint_id == cp_id)))
+            .scalars()
+            .all()
+        )
         assert len(logs) == 1
         assert logs[0].action == "SUBMISSION_CREATED"
         assert logs[0].late_grace_period is False
-        assert logs[0].commit_sha == SAMPLE_SHA_V1
+        assert logs[0].commit_sha is None
 
 
-# ─── UAT-CP-02 & UAT-FIX-01: Chặn thành viên thường nộp bài (403 FORBIDDEN_NOT_TEAM_LEADER) ───
+# ─── UAT-CP-02: Chặn thành viên thường nộp bài (403 FORBIDDEN_NOT_TEAM_LEADER) ───
+
 
 @pytest.mark.asyncio
 async def test_uat_cp_02_forbidden_not_team_leader(client: AsyncClient):
@@ -245,10 +219,11 @@ async def test_uat_cp_02_forbidden_not_team_leader(client: AsyncClient):
     assert res_outsider.json()["error_code"] == "FORBIDDEN_NOT_TEAM_LEADER"
 
 
-# ─── UAT-CP-03 & UAT-FIX-02: Checkpoint trung gian không freeze SHA & validate field động ───
+# ─── UAT-CP-03: Checkpoint trung gian & validate field động ───
+
 
 @pytest.mark.asyncio
-async def test_uat_cp_03_intermediate_checkpoint_no_sha_freeze_and_dynamic_fields(client: AsyncClient):
+async def test_uat_cp_03_intermediate_checkpoint_and_dynamic_fields(client: AsyncClient):
     async with TestSessionLocal() as session:
         _, tokens = await setup_team_and_users(session)
         now = datetime.now(timezone.utc)
@@ -290,28 +265,27 @@ async def test_uat_cp_03_intermediate_checkpoint_no_sha_freeze_and_dynamic_field
     assert res_missing.status_code == 422
     assert res_missing.json()["error_code"] == "MISSING_REQUIRED_FIELD"
 
-    # 2. Nộp đủ slide_url -> 200 OK, status='submitted', commit_sha=None, KHÔNG gọi GitHub API
-    with patch.object(github_service, "fetch_head_commit", new=AsyncMock()) as mock_gh:
-        res_ok = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {
-                    "slide_url": "https://docs.google.com/presentation/d/123",
-                    "progress_note": "Hoàn thành 100% slide",
-                },
+    # 2. Nộp đủ slide_url -> 200 OK, status='submitted', commit_sha=None
+    res_ok = await client.post(
+        "/api/v1/submissions",
+        headers={"Authorization": f"Bearer {tokens['leader']}"},
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {
+                "slide_url": "https://docs.google.com/presentation/d/123",
+                "progress_note": "Hoàn thành 100% slide",
             },
-        )
-        assert res_ok.status_code == 200
-        data = res_ok.json()["data"]
-        assert data["status"] == "submitted"
-        assert data["commit_sha"] is None
-        assert data["submission_data"]["slide_url"] == "https://docs.google.com/presentation/d/123"
-        mock_gh.assert_not_awaited()
+        },
+    )
+    assert res_ok.status_code == 200
+    data = res_ok.json()["data"]
+    assert data["status"] == "submitted"
+    assert data["commit_sha"] is None
+    assert data["submission_data"]["slide_url"] == "https://docs.google.com/presentation/d/123"
 
 
-# ─── UAT-CP-04 & UAT-FIX-03: Nộp lại trước deadline, PENDING_SHA_FREEZE & Unique Constraint ───
+# ─── UAT-CP-04: Nộp lại trước deadline & Unique Constraint ───
+
 
 @pytest.mark.asyncio
 async def test_uat_cp_04_resubmission_before_deadline_and_version_history(client: AsyncClient):
@@ -335,50 +309,41 @@ async def test_uat_cp_04_resubmission_before_deadline_and_version_history(client
     t2 = now - timedelta(minutes=10)
 
     # Lần nộp 1 (v1) tại t1
-    with patch.object(
-        github_service,
-        "fetch_head_commit",
-        new=AsyncMock(return_value=make_mock_verify_response(SAMPLE_SHA_V1)),
-    ):
-        res1 = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
-                "note": "Phiên bản v1",
-                "simulate_time": t1.isoformat(),
-            },
-        )
+    res1 = await client.post(
+        "/api/v1/submissions",
+        headers={"Authorization": f"Bearer {tokens['leader']}"},
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
+            "note": "Phiên bản v1",
+            "simulate_time": t1.isoformat(),
+        },
+    )
     assert res1.status_code == 200
     sub1 = res1.json()["data"]
     assert sub1["version"] == 1
-    assert sub1["commit_sha"] == SAMPLE_SHA_V1
+    assert sub1["commit_sha"] is None
 
     # Lần nộp 2 (v2) tại t2 (cách 20 phút > 10s, ghi đè bản ghi cũ và lưu version_history)
-    with patch.object(
-        github_service,
-        "fetch_head_commit",
-        new=AsyncMock(return_value=make_mock_verify_response(SAMPLE_SHA_V2)),
-    ):
-        res2 = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
-                "note": "Phiên bản v2 cập nhật tính năng",
-                "simulate_time": t2.isoformat(),
-            },
-        )
+    res2 = await client.post(
+        "/api/v1/submissions",
+        headers={"Authorization": f"Bearer {tokens['leader']}"},
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {"repo_url": "https://github.com/alpha/hackflow-v2"},
+            "note": "Phiên bản v2 cập nhật tính năng",
+            "simulate_time": t2.isoformat(),
+        },
+    )
     assert res2.status_code == 200
     sub2 = res2.json()["data"]
     assert sub2["id"] == sub1["id"]  # Cùng 1 bản ghi chính thức nhờ Unique (team_id, checkpoint_id)
     assert sub2["version"] == 2
-    assert sub2["commit_sha"] == SAMPLE_SHA_V2
+    assert sub2["commit_sha"] is None
+    assert sub2["repo_url"] == "https://github.com/alpha/hackflow-v2"
     assert len(sub2["version_history"]) == 1
     assert sub2["version_history"][0]["version"] == 1
-    assert sub2["version_history"][0]["commit_sha"] == SAMPLE_SHA_V1
+    assert sub2["version_history"][0]["repo_url"] == "https://github.com/alpha/hackflow"
 
     # Kiểm tra trong DB chỉ có đúng 1 dòng trong bảng submissions cho (team_id, checkpoint_id)
     async with TestSessionLocal() as session:
@@ -390,7 +355,7 @@ async def test_uat_cp_04_resubmission_before_deadline_and_version_history(client
         )
         assert count == 1
 
-    # Kiểm tra GET /api/v1/submissions trả về đầy đủ 2 phiên bản (v2 mới nhất và v1 lịch sử) cho bảng HF-31
+    # Kiểm tra GET /api/v1/submissions trả về đầy đủ 2 phiên bản (v2 mới nhất và v1 lịch sử)
     list_res = await client.get(
         f"/api/v1/submissions?checkpoint_id={cp_id}",
         headers={"Authorization": f"Bearer {tokens['leader']}"},
@@ -399,12 +364,11 @@ async def test_uat_cp_04_resubmission_before_deadline_and_version_history(client
     items = list_res.json()["data"]
     assert len(items) == 2
     assert items[0]["version"] == 2
-    assert items[0]["commit_sha"] == SAMPLE_SHA_V2
     assert items[1]["version"] == 1
-    assert items[1]["commit_sha"] == SAMPLE_SHA_V1
 
 
-# ─── UAT-CP-05 & UAT-FIX-04: Xử lý Grace Period linh hoạt & cờ late_grace_period trong Audit Log ───
+# ─── UAT-CP-05: Xử lý Grace Period linh hoạt & cờ late_grace_period trong Audit Log ───
+
 
 @pytest.mark.asyncio
 async def test_uat_cp_05_grace_period_submission_and_audit_log(client: AsyncClient):
@@ -461,7 +425,8 @@ async def test_uat_cp_05_grace_period_submission_and_audit_log(client: AsyncClie
     assert logs[0]["late_grace_period"] is True
 
 
-# ─── UAT-CP-06 & UAT-FIX-05: Chặn quá hạn tuyệt đối & kiểm thử trễ 1s (400 DEADLINE_EXCEEDED) ───
+# ─── UAT-CP-06: Chặn quá hạn tuyệt đối & kiểm thử trễ 1s (400 DEADLINE_EXCEEDED) ───
+
 
 @pytest.mark.asyncio
 async def test_uat_cp_06_deadline_exceeded_by_1_second(client: AsyncClient):
@@ -496,15 +461,18 @@ async def test_uat_cp_06_deadline_exceeded_by_1_second(client: AsyncClient):
     assert res.json()["error_code"] == "DEADLINE_EXCEEDED"
 
 
-# ─── UAT-CP-07 & UAT-FIX-06: Xử lý Repo Private/Inaccessible & Tự động Rollback an toàn ───
+# ─── UAT-CP-07: Bảo lưu bản nộp cũ khi nộp lại với URL không hợp lệ ───
+
 
 @pytest.mark.asyncio
-async def test_uat_cp_07_private_repo_error_and_automatic_rollback_on_resubmission(client: AsyncClient):
+async def test_uat_cp_07_invalid_repo_url_preserves_previous_submission_on_resubmission(
+    client: AsyncClient,
+):
     async with TestSessionLocal() as session:
         _, tokens = await setup_team_and_users(session)
         now = datetime.now(timezone.utc)
         cp = Checkpoint(
-            title="Final Checkpoint Rollback Test",
+            title="Final Checkpoint Preservation Test",
             start_time=now - timedelta(hours=2),
             deadline=now + timedelta(hours=2),
             is_active=True,
@@ -520,53 +488,32 @@ async def test_uat_cp_07_private_repo_error_and_automatic_rollback_on_resubmissi
     t2 = now - timedelta(minutes=5)
 
     # Bước 1: Đội trưởng nộp bài v1 hợp lệ thành công
-    with patch.object(
-        github_service,
-        "fetch_head_commit",
-        new=AsyncMock(return_value=make_mock_verify_response(SAMPLE_SHA_V1)),
-    ):
-        res1 = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
-                "note": "Bản nộp hợp lệ v1",
-                "simulate_time": t1.isoformat(),
-            },
-        )
+    res1 = await client.post(
+        "/api/v1/submissions",
+        headers={"Authorization": f"Bearer {tokens['leader']}"},
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
+            "note": "Bản nộp hợp lệ v1",
+            "simulate_time": t1.isoformat(),
+        },
+    )
     assert res1.status_code == 200
-    assert res1.json()["data"]["commit_sha"] == SAMPLE_SHA_V1
 
-    # Bước 2: Đội trưởng nộp lại (v2) nhưng đổi sang Repo Private -> GitHub trả 422 GITHUB_REPO_INACCESSIBLE
-    from app.core.exceptions import UnprocessableEntityException
-
-    with patch.object(
-        github_service,
-        "fetch_head_commit",
-        new=AsyncMock(
-            side_effect=UnprocessableEntityException(
-                message="Repository đang ở chế độ Private.",
-                error_code="GITHUB_REPO_INACCESSIBLE",
-            )
-        ),
-    ):
-        res2 = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/private-repo"},
-                "note": "Bản nộp lỗi repo private",
-                "simulate_time": t2.isoformat(),
-            },
-        )
+    # Bước 2: Đội trưởng nộp lại (v2) nhưng nhập URL sai định dạng GitHub -> 422 INVALID_GITHUB_URL
+    res2 = await client.post(
+        "/api/v1/submissions",
+        headers={"Authorization": f"Bearer {tokens['leader']}"},
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {"repo_url": "https://gitlab.com/alpha/invalid-repo"},
+            "note": "Bản nộp lỗi URL",
+            "simulate_time": t2.isoformat(),
+        },
+    )
 
     assert res2.status_code == 422
-    err_json = res2.json()
-    assert err_json["error_code"] == "GITHUB_REPO_INACCESSIBLE"
-    assert err_json["data"]["rolled_back"] is True
-    assert err_json["data"]["preserved_commit_sha"] == SAMPLE_SHA_V1
+    assert res2.json()["error_code"] == "INVALID_GITHUB_URL"
 
     # Bước 3: Kiểm tra bản ghi bài nộp của đội vẫn giữ nguyên phiên bản v1 SUBMITTED hợp lệ
     list_res = await client.get(
@@ -577,67 +524,12 @@ async def test_uat_cp_07_private_repo_error_and_automatic_rollback_on_resubmissi
     subs = list_res.json()["data"]
     assert len(subs) == 1
     assert subs[0]["status"] == "submitted"
-    assert subs[0]["commit_sha"] == SAMPLE_SHA_V1
     assert subs[0]["repo_url"] == "https://github.com/alpha/hackflow"
     assert subs[0]["version"] == 1
 
 
-# ─── UAT-CP-08 & UAT-FIX-07: Sự cố GitHub API sau 3 lần retry (200 OK sha_verification_failed) ───
-
-@pytest.mark.asyncio
-async def test_uat_cp_08_github_api_503_graceful_fallback(client: AsyncClient):
-    async with TestSessionLocal() as session:
-        _, tokens = await setup_team_and_users(session)
-        now = datetime.now(timezone.utc)
-        cp = Checkpoint(
-            title="Final Checkpoint GitHub Outage",
-            start_time=now - timedelta(hours=1),
-            deadline=now + timedelta(hours=1),
-            is_active=True,
-            is_final_checkpoint=True,
-        )
-        session.add(cp)
-        await session.commit()
-        await session.refresh(cp)
-        cp_id = str(cp.id)
-
-    fallback_verify = VerifyGitHubRepoResponse(
-        repo_url="https://github.com/alpha/hackflow",
-        owner="alpha",
-        repo="hackflow",
-        branch=None,
-        commit_sha=None,
-        status=SubmissionStatus.SHA_VERIFICATION_FAILED.value,
-        error_code="GITHUB_API_UNAVAILABLE",
-        retry_attempts=3,
-        is_verified=False,
-        is_fallback=True,
-        message="GitHub API 503 sau 3 lần retry.",
-    )
-
-    with patch.object(
-        github_service,
-        "fetch_head_commit",
-        new=AsyncMock(return_value=fallback_verify),
-    ):
-        res = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
-            },
-        )
-
-    assert res.status_code == 200
-    body = res.json()
-    assert body["success"] is True
-    assert body["data"]["status"] == "sha_verification_failed"
-    assert body["data"]["commit_sha"] is None
-    assert "BTC sẽ xác thực thủ công" in body["message"]
-
-
 # ─── UAT-CP-09: Chống trùng lặp & Cửa sổ Idempotency (10s & Idempotency-Key) ───
+
 
 @pytest.mark.asyncio
 async def test_uat_cp_09_idempotency_key_and_10s_duplicate_detection(client: AsyncClient):
@@ -656,63 +548,56 @@ async def test_uat_cp_09_idempotency_key_and_10s_duplicate_detection(client: Asy
         await session.refresh(cp)
         cp_id = str(cp.id)
 
-    with patch.object(
-        github_service,
-        "fetch_head_commit",
-        new=AsyncMock(return_value=make_mock_verify_response(SAMPLE_SHA_V1)),
-    ) as mock_gh:
-        # 1. Gửi lần đầu với Idempotency-Key
-        res1 = await client.post(
-            "/api/v1/submissions",
-            headers={
-                "Authorization": f"Bearer {tokens['leader']}",
-                "Idempotency-Key": "idem-uuid-001",
-            },
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
-                "simulate_time": now.isoformat(),
-            },
-        )
-        assert res1.status_code == 200
-        assert res1.json()["data"]["is_duplicate"] is False
-        assert mock_gh.await_count == 1
+    # 1. Gửi lần đầu với Idempotency-Key
+    res1 = await client.post(
+        "/api/v1/submissions",
+        headers={
+            "Authorization": f"Bearer {tokens['leader']}",
+            "Idempotency-Key": "idem-uuid-001",
+        },
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
+            "simulate_time": now.isoformat(),
+        },
+    )
+    assert res1.status_code == 200
+    assert res1.json()["data"]["is_duplicate"] is False
 
-        # 2. Gửi lại cùng Idempotency-Key -> trả về bản ghi hiện tại, KHÔNG gọi lại GitHub API
-        res2 = await client.post(
-            "/api/v1/submissions",
-            headers={
-                "Authorization": f"Bearer {tokens['leader']}",
-                "Idempotency-Key": "idem-uuid-001",
-            },
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
-                "simulate_time": (now + timedelta(seconds=30)).isoformat(),
-            },
-        )
-        assert res2.status_code == 200
-        assert res2.json()["data"]["is_duplicate"] is True
-        assert res2.json()["data"]["version"] == 1
-        assert mock_gh.await_count == 1
+    # 2. Gửi lại cùng Idempotency-Key -> trả về bản ghi hiện tại
+    res2 = await client.post(
+        "/api/v1/submissions",
+        headers={
+            "Authorization": f"Bearer {tokens['leader']}",
+            "Idempotency-Key": "idem-uuid-001",
+        },
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
+            "simulate_time": (now + timedelta(seconds=30)).isoformat(),
+        },
+    )
+    assert res2.status_code == 200
+    assert res2.json()["data"]["is_duplicate"] is True
+    assert res2.json()["data"]["version"] == 1
 
-        # 3. Gửi lại cùng payload trong cửa sổ < 10s (vd: sau 4s) không truyền Idempotency-Key -> vẫn chặn duplicate
-        res3 = await client.post(
-            "/api/v1/submissions",
-            headers={"Authorization": f"Bearer {tokens['leader']}"},
-            json={
-                "checkpoint_id": cp_id,
-                "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
-                "simulate_time": (now + timedelta(seconds=4)).isoformat(),
-            },
-        )
-        assert res3.status_code == 200
-        assert res3.json()["data"]["is_duplicate"] is True
-        assert res3.json()["data"]["version"] == 1
-        assert mock_gh.await_count == 1
+    # 3. Gửi lại cùng payload trong cửa sổ < 10s (vd: sau 4s) không truyền Idempotency-Key -> vẫn chặn duplicate
+    res3 = await client.post(
+        "/api/v1/submissions",
+        headers={"Authorization": f"Bearer {tokens['leader']}"},
+        json={
+            "checkpoint_id": cp_id,
+            "submission_data": {"repo_url": "https://github.com/alpha/hackflow"},
+            "simulate_time": (now + timedelta(seconds=4)).isoformat(),
+        },
+    )
+    assert res3.status_code == 200
+    assert res3.json()["data"]["is_duplicate"] is True
+    assert res3.json()["data"]["version"] == 1
 
 
 # ─── UAT-CP-10: Nộp bài khi Checkpoint chưa mở (UPCOMING) hoặc inactive (400 INVALID_CHECKPOINT_STATUS) ───
+
 
 @pytest.mark.asyncio
 async def test_uat_cp_10_invalid_checkpoint_status_upcoming_or_inactive(client: AsyncClient):
@@ -765,6 +650,7 @@ async def test_uat_cp_10_invalid_checkpoint_status_upcoming_or_inactive(client: 
 
 # ─── UAT-CP-11: Chặn tài khoản chưa duyệt nộp bài (403 ACCOUNT_NOT_APPROVED) ───
 
+
 @pytest.mark.asyncio
 async def test_uat_cp_11_account_not_approved_forbidden(client: AsyncClient):
     async with TestSessionLocal() as session:
@@ -794,10 +680,11 @@ async def test_uat_cp_11_account_not_approved_forbidden(client: AsyncClient):
     assert res.json()["error_code"] == "ACCOUNT_NOT_APPROVED"
 
 
-# ─── UAT-CP-12: Kiểm tra URL GitHub sai định dạng hoặc Repo rỗng (422 INVALID_GITHUB_URL / GITHUB_REPO_EMPTY) ───
+# ─── UAT-CP-12: Kiểm tra URL GitHub sai định dạng (422 INVALID_GITHUB_URL) ───
+
 
 @pytest.mark.asyncio
-async def test_uat_cp_12_invalid_github_url_and_empty_repo(client: AsyncClient):
+async def test_uat_cp_12_invalid_github_url(client: AsyncClient):
     async with TestSessionLocal() as session:
         _, tokens = await setup_team_and_users(session)
         now = datetime.now(timezone.utc)
@@ -825,7 +712,7 @@ async def test_uat_cp_12_invalid_github_url_and_empty_repo(client: AsyncClient):
     assert res_bad_url.status_code == 422
     assert res_bad_url.json()["error_code"] == "INVALID_GITHUB_URL"
 
-    # 2. Đảm bảo không còn bản ghi rác PENDING_SHA_FREEZE trong DB sau khi lần nộp đầu thất bại
+    # 2. Đảm bảo không có bản ghi lỗi trong DB sau khi lần nộp đầu thất bại
     async with TestSessionLocal() as session:
         count = await session.scalar(
             select(func.count(Submission.id)).where(Submission.checkpoint_id == cp_id)
@@ -835,8 +722,11 @@ async def test_uat_cp_12_invalid_github_url_and_empty_repo(client: AsyncClient):
 
 # ─── UAT-CP-13: Gia hạn thủ công từ Admin & Đội trưởng nộp lại kèm Audit Log ───
 
+
 @pytest.mark.asyncio
-async def test_uat_cp_13_admin_extends_deadline_and_team_submits_with_audit_logs(client: AsyncClient):
+async def test_uat_cp_13_admin_extends_deadline_and_team_submits_with_audit_logs(
+    client: AsyncClient,
+):
     async with TestSessionLocal() as session:
         _, tokens = await setup_team_and_users(session)
         now = datetime.now(timezone.utc)
@@ -898,6 +788,7 @@ async def test_uat_cp_13_admin_extends_deadline_and_team_submits_with_audit_logs
 
 
 # ─── Tương thích Frontend HF-30 / HF-31: POST /checkpoints/{id}/submissions & GET /checkpoints ───
+
 
 @pytest.mark.asyncio
 async def test_frontend_compat_checkpoint_submissions_and_latest_submission(client: AsyncClient):

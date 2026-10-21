@@ -356,7 +356,7 @@ export const TeamFormDialog: React.FC<TeamFormDialogProps> = ({
                 </p>
               ) : (
                 <p className="text-[11px] text-muted-foreground">
-                  Hệ thống sẽ dùng kho mã nguồn này để đóng băng Commit SHA ở chặng cuối.
+                  Đường dẫn kho mã nguồn GitHub chính thức của đội thi.
                 </p>
               )}
             </div>

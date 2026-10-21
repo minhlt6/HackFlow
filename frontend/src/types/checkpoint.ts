@@ -44,7 +44,7 @@ export interface Checkpoint {
   deadline: string;
   requirements?: string | null;
   is_active: boolean;
-  is_final_checkpoint?: boolean; // HF-23: true nếu là chặng chốt sản phẩm cuối cùng (bắt buộc repo & freeze SHA), false nếu là chặng tiến độ trung gian
+  is_final_checkpoint?: boolean;
   grace_period_seconds?: number;
   submission_fields?: SubmissionFieldConfig[] | null;
   order?: number;
@@ -84,7 +84,7 @@ export interface CheckpointWithSubmission extends Checkpoint {
 }
 
 /**
- * Bảng ánh xạ mã lỗi chuẩn từ Backend (Mục 5 SRS HF-23 & Mục 2 HF-35) sang thông báo tiếng Việt rõ ràng
+ * Bảng ánh xạ mã lỗi chuẩn từ Backend sang thông báo tiếng Việt rõ ràng
  */
 export const SRS_HF23_ERROR_MESSAGES: Record<string, string> = {
   FORBIDDEN_NOT_TEAM_LEADER:
@@ -102,21 +102,20 @@ export const SRS_HF23_ERROR_MESSAGES: Record<string, string> = {
   MISSING_REQUIRED_FIELD:
     'Thiếu trường dữ liệu bắt buộc theo cấu hình của chặng thi. Vui lòng kiểm tra và điền đầy đủ các mục có dấu * (Mã lỗi: 422 MISSING_REQUIRED_FIELD).',
   GITHUB_REPO_INACCESSIBLE:
-    'Không thể truy cập kho mã nguồn GitHub. Repository đang để ở chế độ Private hoặc đường dẫn URL không tồn tại — vui lòng mở Public repository và kiểm tra lại URL (Mã lỗi: 422 GITHUB_REPO_INACCESSIBLE).',
+    'Không thể truy cập kho mã nguồn GitHub. Vui lòng kiểm tra lại đường dẫn URL (Mã lỗi: 422 GITHUB_REPO_INACCESSIBLE).',
   INVALID_GITHUB_URL:
     'Đường dẫn GitHub repository không đúng định dạng chuẩn https://github.com/{owner}/{repo} (Mã lỗi: 422 INVALID_GITHUB_URL).',
   GITHUB_REPO_EMPTY:
-    'Kho mã nguồn GitHub hiện đang rỗng (chưa có commit nào). Vui lòng push code lên repository trước khi nộp bài (Mã lỗi: 422 GITHUB_REPO_EMPTY).',
+    'Kho mã nguồn GitHub hiện đang rỗng. Vui lòng đẩy mã nguồn lên repository trước khi nộp bài (Mã lỗi: 422 GITHUB_REPO_EMPTY).',
   GITHUB_API_UNAVAILABLE:
-    'GitHub API đang tạm thời gián đoạn sau 3 lần thử lại (503). Hệ thống đã ghi nhận thời điểm nộp bài hợp lệ của đội và chuyển sang trạng thái chờ Ban tổ chức xác minh Commit SHA thủ công (Mã lỗi: 503 GITHUB_API_UNAVAILABLE).',
+    'Dịch vụ kết nối tạm thời gián đoạn. Vui lòng thử lại sau (Mã lỗi: 503 GITHUB_API_UNAVAILABLE).',
 };
 
-
 /**
- * Lấy danh sách trường nộp bài hiệu lực theo cấu hình động `checkpoint.submission_fields` (SRS HF-23).
+ * Lấy danh sách trường nộp bài hiệu lực theo cấu hình động `checkpoint.submission_fields`.
  * Nếu `submission_fields` chưa được cấu hình:
- * - Chặng cuối (`is_final_checkpoint === true`): Bắt buộc `repo_url` (apply_sha_freeze) + tùy chọn `demo_url`.
- * - Chặng trung gian (`is_final_checkpoint === false`): Ẩn ô GitHub Repo, chỉ hiển thị trường nộp link báo cáo/tài liệu/demo (`demo_url`).
+ * - Chặng cuối (`is_final_checkpoint === true`): Bắt buộc `repo_url` + tùy chọn `demo_url`.
+ * - Chặng trung gian (`is_final_checkpoint === false`): Chỉ hiển thị trường nộp link báo cáo/tài liệu/demo (`demo_url`).
  */
 export function getEffectiveSubmissionFields(checkpoint: Checkpoint): SubmissionFieldConfig[] {
   if (Array.isArray(checkpoint.submission_fields) && checkpoint.submission_fields.length > 0) {
@@ -129,7 +128,7 @@ export function getEffectiveSubmissionFields(checkpoint: Checkpoint): Submission
         field_key: 'repo_url',
         field_label: 'GitHub Repository URL',
         required: true,
-        apply_sha_freeze: true,
+        apply_sha_freeze: false,
       },
       {
         field_key: 'demo_url',
@@ -151,8 +150,7 @@ export function getEffectiveSubmissionFields(checkpoint: Checkpoint): Submission
 }
 
 /**
- * Phân tích trạng thái bài nộp (`Submission.status`) theo chuẩn SRS HF-23:
- * SUBMITTED | PENDING_SHA_FREEZE | SHA_VERIFICATION_FAILED | EVALUATED | LATE | INVALID
+ * Phân tích trạng thái bài nộp (`Submission.status`)
  */
 export function getSubmissionStatusMeta(status: SubmissionStatus, isFinal: boolean): {
   normalizedStatus: string;
@@ -177,28 +175,6 @@ export function getSubmissionStatusMeta(status: SubmissionStatus, isFinal: boole
           ? 'Đã ghi nhận & chấm điểm bài nộp sản phẩm!'
           : 'Đã ghi nhận & chấm điểm báo cáo tiến độ!',
       };
-    case 'pending_sha_freeze':
-      return {
-        normalizedStatus,
-        badgeVariant: 'indigo',
-        badgeLabel: 'Đang đóng băng SHA',
-        containerClass: 'bg-indigo-500/10 border-indigo-500/30',
-        iconBgClass: 'bg-indigo-500/20 text-indigo-400',
-        title: 'Đã ghi nhận thời điểm nộp — Đang đồng bộ Commit SHA với GitHub',
-        statusNote:
-          'Hệ thống đã khóa thời gian nộp hợp lệ (submitted_at) và đang kết nối GitHub API để lấy HEAD Commit SHA.',
-      };
-    case 'sha_verification_failed':
-      return {
-        normalizedStatus,
-        badgeVariant: 'warning',
-        badgeLabel: 'Chờ BTC xác minh SHA',
-        containerClass: 'bg-amber-500/10 border-amber-500/30',
-        iconBgClass: 'bg-amber-500/20 text-amber-400',
-        title: 'Đã ghi nhận nộp đúng hạn — Chờ BTC xác minh Commit SHA thủ công',
-        statusNote:
-          'GitHub API lỗi/timeout sau 3 lần retry. Hệ thống vẫn bảo lưu thời điểm nộp đúng hạn của đội và đã báo Ban tổ chức xác minh SHA thủ công.',
-      };
     case 'late':
       return {
         normalizedStatus,
@@ -217,7 +193,7 @@ export function getSubmissionStatusMeta(status: SubmissionStatus, isFinal: boole
         iconBgClass: 'bg-rose-500/20 text-rose-400',
         title: 'Bài nộp không hợp lệ — Vui lòng kiểm tra và nộp lại',
         statusNote:
-          'Bản nộp này không hợp lệ (Repository không truy cập được hoặc sai định dạng yêu cầu).',
+          'Bản nộp này không hợp lệ (Sai định dạng đường dẫn yêu cầu).',
       };
     case 'submitted':
     default:
@@ -232,32 +208,6 @@ export function getSubmissionStatusMeta(status: SubmissionStatus, isFinal: boole
           : 'Đã ghi nhận báo cáo tiến độ thành công!',
       };
   }
-}
-
-/**
- * Cắt ngắn Commit SHA (40 ký tự) xuống 7 ký tự đầu theo chuẩn Git/GitHub (HF-31 AC-2)
- */
-export function formatCommitSha(sha?: string | null): string {
-  if (!sha || !sha.trim()) return '-';
-  const clean = sha.trim();
-  return clean.length <= 7 ? clean : clean.slice(0, 7);
-}
-
-/**
- * Tạo đường dẫn liên kết trực tiếp tới GitHub Commit (HF-31 AC-2)
- */
-export function getCommitUrl(repoUrl?: string | null, commitSha?: string | null): string | null {
-  if (!commitSha || !commitSha.trim()) return null;
-  const sha = commitSha.trim();
-  if (repoUrl && repoUrl.trim().startsWith('http')) {
-    const cleanRepo = repoUrl
-      .trim()
-      .replace(/\/+$/, '')
-      .replace(/\.git$/i, '')
-      .replace(/\/+$/, '');
-    return `${cleanRepo}/commit/${sha}`;
-  }
-  return null;
 }
 
 /**
@@ -302,12 +252,11 @@ export function formatSubmissionTime(dateString: string): {
   const year = date.getFullYear();
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
-  const absolute = `${day}/${month}/${year} ${hours}:${minutes}`;
 
+  const absolute = `${day}/${month}/${year} ${hours}:${minutes}`;
   return {
     relative,
     absolute,
     combined: `${relative} (${absolute})`,
   };
 }
-

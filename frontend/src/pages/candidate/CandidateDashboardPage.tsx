@@ -12,7 +12,6 @@ import {
   CheckSquare,
   HelpCircle,
   ArrowRight,
-  GitBranch,
   ShieldCheck,
   Megaphone,
 } from 'lucide-react';
@@ -207,7 +206,6 @@ export const CandidateDashboardPage: React.FC = () => {
             <div className="space-y-3">
               {checkpoints.map((cp, idx) => {
                 const isSubmitted = teamSubmissions.some((s) => s.checkpointId === cp.id);
-                const sub = teamSubmissions.find((s) => s.checkpointId === cp.id);
 
                 return (
                   <div
@@ -234,10 +232,7 @@ export const CandidateDashboardPage: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                       {isSubmitted ? (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-mono">
-                          <GitBranch size={13} />
-                          <span>SHA: {sub?.commitSha.slice(0, 7)}</span>
-                        </div>
+                        <Badge variant="success">Đã nộp</Badge>
                       ) : (
                         <Badge variant="warning">Chưa nộp</Badge>
                       )}
