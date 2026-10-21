@@ -1,54 +1,121 @@
-# Python
+# ============================================================
+# Python & Backend
+# ============================================================
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
+*.so
 .Python
-*.egg-info/
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+!frontend/src/lib/
+!frontend/src/lib/**
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
 .venv/
 venv/
+ENV/
 env/
+env.bak/
+venv.bak/
 
-# Environment variables — KHONG BAO GIO COMMIT
+# Environment Variables (TUYỆT ĐỐI KHÔNG COMMIT FILE CHỨA KEY)
 .env
 .env.local
+.env.*.local
+.env.development
+.env.test
 .env.production
 
-# Database
+# Database (Local SQLite)
 *.db
 *.sqlite
 *.sqlite3
 
-# FastAPI / Uvicorn
-*.log
-
 # Alembic
-# (giữ migrations/ nhưng bỏ __pycache__ bên trong)
 migrations/__pycache__/
 
-# Node / React
-frontend/node_modules/
-frontend/.vite/
-frontend/dist/
+# Pytest / Coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
-# IDE
-.vscode/
+# ============================================================
+# Node & Frontend (React / Vite)
+# ============================================================
+frontend/node_modules/
+node_modules/
+frontend/dist/
+dist/
+dist-ssr/
+*.local
+
+# Vite / Build cache
+.vite/
+frontend/.vite/
+
+# NPM debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================================
+# IDE & System Files
+# ============================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!frontend/.vscode/
+!frontend/.vscode/extensions.json
 .idea/
 *.swp
 *.swo
+*~
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Test coverage
-.coverage
-htmlcov/
-.pytest_cache/
+# Logs & Temporary Files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
 
-# PowerPoint tạm (không cần track)
+# ============================================================
+# Notion Integration & Local Notes (chỉ dùng local, KHÔNG push Git)
+# ============================================================
+notion-module/
 *.pptx
-
-# File ghi chú cá nhân / tóm tắt nội bộ (không push)
 ly_do_trien_khai_rut_gon.md
-
