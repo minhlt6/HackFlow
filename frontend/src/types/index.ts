@@ -54,6 +54,10 @@ export interface Team {
   status: 'approved' | 'pending' | 'rejected' | 'INCOMPLETE' | 'VALID' | 'APPROVED' | 'REJECTED';
   members: TeamMember[];
   memberCount?: number;
+  roomId?: string;
+  zoneId?: string;
+  isZoneWinner?: boolean;
+  isRoomWinner?: boolean;
   rejectionReason?: string;
   createdAt: string;
 }
@@ -278,6 +282,62 @@ export interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
+}
+
+export type JudgingStage =
+  | 'not_started'
+  | 'stage_1_zone'
+  | 'stage_2_room'
+  | 'stage_3_cross_room'
+  | 'completed';
+
+export interface ZoneConfig {
+  id: string;
+  roomId: string;
+  code: string;
+  name: string;
+  maxTeams: number;
+}
+
+export interface RoomCheckpointScheduleItem {
+  id: string;
+  roomId: string;
+  checkpointId: string;
+  startTime: string;
+  deadline: string;
+  isActive: boolean;
+}
+
+export interface RoomConfig {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  managerId?: string;
+  managerName: string;
+  capacity: number;
+  startTime: string;
+  endTime: string;
+  judgingStage: JudgingStage;
+  roomTopN: 1 | 3 | number;
+  isActive: boolean;
+  zones: ZoneConfig[];
+  checkpointSchedules: RoomCheckpointScheduleItem[];
+}
+
+export interface PeerEvaluationBallot {
+  id: string;
+  stage: 'stage_1_zone' | 'stage_2_room' | 'stage_3_cross_room';
+  roomId?: string;
+  zoneId?: string;
+  evaluatorTeamId: string;
+  evaluatorTeamName: string;
+  targetTeamId: string;
+  targetTeamName: string;
+  scores: Record<string, number>;
+  totalScore: number;
+  comment: string;
+  submittedAt: string;
 }
 
 export * from './checkpoint';

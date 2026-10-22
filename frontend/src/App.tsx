@@ -48,7 +48,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/topics': 'Chọn đề tài',
   '/checkpoints': 'Tiến độ các chặng',
   '/final-submission': 'Nộp bài chung cuộc',
-  '/scoreboard': 'Bảng xếp hạng',
+  '/scoreboard': 'Chấm chéo 3 vòng & Bảng xếp hạng',
   '/tickets': 'Hỗ trợ trực tuyến',
   // Admin
   '/admin': 'Tổng quan Quản trị',
@@ -60,7 +60,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/admin/checkpoints': 'Cấu hình chặng nộp',
   '/admin/criteria': 'Tiêu chí chấm điểm',
   '/admin/personnel': 'Cố vấn chuyên môn',
-  '/admin/results': 'Kết quả & Công bố',
+  '/admin/results': 'Điều phối Phòng / Zone & Chấm chéo 3 vòng',
   '/admin/announcements': 'Phát thông báo',
   '/admin/config': 'Cấu hình cuộc thi',
   // Mentor
