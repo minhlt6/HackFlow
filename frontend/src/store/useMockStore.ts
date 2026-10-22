@@ -13,6 +13,9 @@ import type {
   WhitelistEntry,
   Announcement,
   HackathonConfig,
+  RoomConfig,
+  PeerEvaluationBallot,
+  JudgingStage,
 } from '../types';
 import {
   mockUsers,
@@ -28,6 +31,8 @@ import {
   initialEvaluations,
   initialSupportTickets,
   initialAnnouncements,
+  initialRooms,
+  initialPeerEvaluations,
 } from '../mock/mockData';
 
 /**
@@ -165,6 +170,45 @@ interface MockStoreState {
   addAnnouncement: (title: string, content: string, isPinned?: boolean) => void;
   broadcastAnnouncement: (title: string, content: string, targetRole?: 'all' | 'candidates' | 'mentors') => void;
   deleteAnnouncement: (id: string) => void;
+  _legacyDeleteAnnouncement?: (id: string) => void;
+
+  // AI Thực Chiến: Rooms, Zones, Per-Room Checkpoint Schedules & 3-Stage Peer Grading
+  rooms: RoomConfig[];
+  peerEvaluations: PeerEvaluationBallot[];
+  addRoom: (payload: {
+    code: string;
+    name: string;
+    description?: string;
+    managerName: string;
+    capacity: number;
+    startTime: string;
+    endTime: string;
+    roomTopN: number;
+    zoneCount: number;
+  }) => void;
+  updateRoom: (roomId: string, updates: Partial<RoomConfig>) => void;
+  addZoneToRoom: (roomId: string, name: string, maxTeams: number) => void;
+  assignTeamToRoomZone: (teamId: string, roomId?: string, zoneId?: string) => void;
+  autoDivideRoomZones: (roomId: string) => void;
+  upsertRoomCheckpointSchedule: (
+    roomId: string,
+    checkpointId: string,
+    startTime: string,
+    deadline: string,
+    isActive?: boolean
+  ) => void;
+  advanceRoomJudgingStage: (
+    roomId: string,
+    targetStage: JudgingStage,
+    roomTopN?: number
+  ) => void;
+  submitPeerEvaluation: (payload: {
+    stage: 'stage_1_zone' | 'stage_2_room' | 'stage_3_cross_room';
+    evaluatorTeamId: string;
+    targetTeamId: string;
+    scores: Record<string, number>;
+    comment: string;
+  }) => { success: boolean; message: string };
 
   // Reset
   resetAllMockData: () => void;
@@ -1250,6 +1294,275 @@ export const useMockStore = create<MockStoreState>()(
         set((state) => ({ announcements: state.announcements.filter((a) => a.id !== id) }));
       },
 
+      rooms: initialRooms,
+      peerEvaluations: initialPeerEvaluations,
+
+      addRoom: (payload) => {
+        const roomId = `room-${Date.now()}`;
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const zones = Array.from({ length: Math.max(1, payload.zoneCount || 2) }).map((_, idx) => {
+          const letter = alphabet[idx] || String(idx + 1);
+          return {
+            id: `${roomId}-zone-${letter.toLowerCase()}`,
+            roomId,
+            code: `ZONE-${letter}`,
+            name: `Zone ${letter}`,
+            maxTeams: 5,
+          };
+        });
+        const newRoom: RoomConfig = {
+          id: roomId,
+          code: payload.code.trim().toUpperCase(),
+          name: payload.name.trim(),
+          description: payload.description || 'Cùng đề thi & tài nguyên dữ liệu Mentor • Chia Zone chấm chéo',
+          managerName: payload.managerName.trim() || 'Quản lý phòng BTC',
+          capacity: payload.capacity || 40,
+          startTime: payload.startTime,
+          endTime: payload.endTime,
+          judgingStage: 'stage_1_zone',
+          roomTopN: payload.roomTopN || 1,
+          isActive: true,
+          zones,
+          checkpointSchedules: [],
+        };
+        set((state) => ({ rooms: [...state.rooms, newRoom] }));
+      },
+
+      updateRoom: (roomId, updates) => {
+        set((state) => ({
+          rooms: state.rooms.map((r) => (r.id === roomId ? { ...r, ...updates } : r)),
+        }));
+      },
+
+      addZoneToRoom: (roomId, name, maxTeams) => {
+        set((state) => ({
+          rooms: state.rooms.map((r) => {
+            if (r.id !== roomId) return r;
+            const nextIdx = r.zones.length + 1;
+            const newZone = {
+              id: `${roomId}-z-${Date.now()}`,
+              roomId,
+              code: `ZONE-${nextIdx}`,
+              name: name.trim(),
+              maxTeams: maxTeams || 5,
+            };
+            return { ...r, zones: [...r.zones, newZone] };
+          }),
+        }));
+      },
+
+      assignTeamToRoomZone: (teamId, roomId, zoneId) => {
+        set((state) => ({
+          teams: state.teams.map((t) =>
+            t.id === teamId ? { ...t, roomId, zoneId } : t
+          ),
+        }));
+      },
+
+      autoDivideRoomZones: (roomId) => {
+        set((state) => {
+          const room = state.rooms.find((r) => r.id === roomId);
+          if (!room || room.zones.length === 0) return state;
+          const roomTeams = state.teams.filter((t) => t.roomId === roomId);
+          const zoneByTeamId: Record<string, string> = {};
+          roomTeams.forEach((t, idx) => {
+            const z = room.zones[idx % room.zones.length];
+            zoneByTeamId[t.id] = z.id;
+          });
+          return {
+            teams: state.teams.map((t) =>
+              zoneByTeamId[t.id] ? { ...t, zoneId: zoneByTeamId[t.id] } : t
+            ),
+          };
+        });
+      },
+
+      upsertRoomCheckpointSchedule: (roomId, checkpointId, startTime, deadline, isActive = true) => {
+        set((state) => ({
+          rooms: state.rooms.map((r) => {
+            if (r.id !== roomId) return r;
+            const existingIdx = r.checkpointSchedules.findIndex(
+              (s) => s.checkpointId === checkpointId
+            );
+            const nextSchedules = [...r.checkpointSchedules];
+            if (existingIdx >= 0) {
+              nextSchedules[existingIdx] = {
+                ...nextSchedules[existingIdx],
+                startTime,
+                deadline,
+                isActive,
+              };
+            } else {
+              nextSchedules.push({
+                id: `rcs-${roomId}-${checkpointId}`,
+                roomId,
+                checkpointId,
+                startTime,
+                deadline,
+                isActive,
+              });
+            }
+            return { ...r, checkpointSchedules: nextSchedules };
+          }),
+        }));
+      },
+
+      advanceRoomJudgingStage: (roomId, targetStage, roomTopN) => {
+        set((state) => {
+          const room = state.rooms.find((r) => r.id === roomId);
+          if (!room) return state;
+          const effectiveTopN = roomTopN ?? room.roomTopN ?? 1;
+          const evals = state.peerEvaluations;
+
+          const getAvg = (teamId: string, stg: string) => {
+            const ballots = evals.filter(
+              (b) => b.stage === stg && b.targetTeamId === teamId
+            );
+            if (ballots.length === 0) return 0;
+            return (
+              ballots.reduce((acc, b) => acc + b.totalScore, 0) / ballots.length
+            );
+          };
+
+          let updatedTeams = [...state.teams];
+
+          // Khi chuyển sang Vòng 2 (stage_2_room) -> Chốt Top 1 của mỗi Zone trong phòng
+          if (
+            targetStage === 'stage_2_room' ||
+            targetStage === 'stage_3_cross_room' ||
+            targetStage === 'completed'
+          ) {
+            const zoneWinnerIds = new Set<string>();
+            for (const zone of room.zones) {
+              const zTeams = updatedTeams.filter(
+                (t) => t.roomId === roomId && t.zoneId === zone.id
+              );
+              if (zTeams.length > 0) {
+                const sorted = [...zTeams].sort(
+                  (a, b) => getAvg(b.id, 'stage_1_zone') - getAvg(a.id, 'stage_1_zone')
+                );
+                zoneWinnerIds.add(sorted[0].id);
+              }
+            }
+            updatedTeams = updatedTeams.map((t) =>
+              t.roomId === roomId
+                ? { ...t, isZoneWinner: zoneWinnerIds.has(t.id) }
+                : t
+            );
+          }
+
+          // Khi chuyển sang Vòng 3 (stage_3_cross_room) hoặc completed -> Chốt Top 1 hoặc Top 3 của Phòng
+          if (targetStage === 'stage_3_cross_room' || targetStage === 'completed') {
+            const candidates = updatedTeams.filter(
+              (t) => t.roomId === roomId && t.isZoneWinner
+            );
+            const sortedRoom = [...candidates].sort((a, b) => {
+              const s2Diff = getAvg(b.id, 'stage_2_room') - getAvg(a.id, 'stage_2_room');
+              if (s2Diff !== 0) return s2Diff;
+              return getAvg(b.id, 'stage_1_zone') - getAvg(a.id, 'stage_1_zone');
+            });
+            const roomWinnerIds = new Set(
+              sortedRoom.slice(0, effectiveTopN).map((t) => t.id)
+            );
+            updatedTeams = updatedTeams.map((t) =>
+              t.roomId === roomId
+                ? { ...t, isRoomWinner: roomWinnerIds.has(t.id) }
+                : t
+            );
+          }
+
+          return {
+            teams: updatedTeams,
+            rooms: state.rooms.map((r) =>
+              r.id === roomId
+                ? { ...r, judgingStage: targetStage, roomTopN: effectiveTopN }
+                : r
+            ),
+          };
+        });
+      },
+
+      submitPeerEvaluation: ({ stage, evaluatorTeamId, targetTeamId, scores, comment }) => {
+        const state = get();
+        if (evaluatorTeamId === targetTeamId) {
+          return {
+            success: false,
+            message: 'Đội thi không được phép tự chấm điểm cho chính đội của mình.',
+          };
+        }
+        const evaluatorTeam = state.teams.find((t) => t.id === evaluatorTeamId);
+        const targetTeam = state.teams.find((t) => t.id === targetTeamId);
+        if (!evaluatorTeam || !targetTeam) {
+          return {
+            success: false,
+            message: 'Không tìm thấy thông tin đội chấm hoặc đội được chấm.',
+          };
+        }
+        if (stage === 'stage_1_zone' && evaluatorTeam.zoneId !== targetTeam.zoneId) {
+          return {
+            success: false,
+            message: 'Ở Vòng 1 (Chấm trong Zone), các đội chỉ chấm chéo các đội trong cùng Zone.',
+          };
+        }
+        if (stage === 'stage_2_room') {
+          if (evaluatorTeam.roomId !== targetTeam.roomId) {
+            return {
+              success: false,
+              message: 'Ở Vòng 2 (Cấp Phòng), chỉ chấm các đội Top 1 Zone trong cùng Phòng.',
+            };
+          }
+          if (!targetTeam.isZoneWinner) {
+            return {
+              success: false,
+              message: 'Đội này không thuộc danh sách Top 1 Zone thuyết trình cấp Phòng.',
+            };
+          }
+        }
+        if (stage === 'stage_3_cross_room' && !targetTeam.isRoomWinner) {
+          return {
+            success: false,
+            message: 'Ở Vòng 3 (Liên Phòng), chỉ chấm các đội Top 1/Top 3 đại diện từ các Phòng.',
+          };
+        }
+
+        const totalScore = normalizeScoreTo100(undefined, scores, state.rubricCriteria);
+        const existingIdx = state.peerEvaluations.findIndex(
+          (b) =>
+            b.stage === stage &&
+            b.evaluatorTeamId === evaluatorTeamId &&
+            b.targetTeamId === targetTeamId
+        );
+        const ballot: PeerEvaluationBallot = {
+          id: existingIdx >= 0 ? state.peerEvaluations[existingIdx].id : `pe-${Date.now()}`,
+          stage,
+          roomId: targetTeam.roomId,
+          zoneId: targetTeam.zoneId,
+          evaluatorTeamId,
+          evaluatorTeamName: evaluatorTeam.name,
+          targetTeamId,
+          targetTeamName: targetTeam.name,
+          scores,
+          totalScore,
+          comment: comment.trim(),
+          submittedAt: new Date().toISOString(),
+        };
+
+        const nextEvals = [...state.peerEvaluations];
+        if (existingIdx >= 0) {
+          nextEvals[existingIdx] = ballot;
+        } else {
+          nextEvals.unshift(ballot);
+        }
+        set({ peerEvaluations: nextEvals });
+        return {
+          success: true,
+          message: `Đã gửi phiếu chấm chéo cho đội ${targetTeam.name} (${totalScore}/100 điểm).`,
+        };
+      },
+      _legacyDeleteAnnouncement: (id: string) => {
+        set((state) => ({ announcements: state.announcements.filter((a) => a.id !== id) }));
+      },
+
       // Reset
       resetAllMockData: () => {
         set({
@@ -1268,6 +1581,8 @@ export const useMockStore = create<MockStoreState>()(
           evaluations: initialEvaluations,
           tickets: initialSupportTickets,
           announcements: initialAnnouncements,
+          rooms: initialRooms,
+          peerEvaluations: initialPeerEvaluations,
           isWizardOpen: false,
           wizardStep: 1,
           onboardingCompletedUsers: {},

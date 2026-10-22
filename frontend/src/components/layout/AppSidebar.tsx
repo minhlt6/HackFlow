@@ -92,7 +92,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           items: [
             { to: '/checkpoints', label: 'Tiến độ các chặng', icon: CheckSquare },
             { to: '/final-submission', label: 'Nộp bài chung cuộc', icon: Send },
-            { to: '/scoreboard', label: 'Bảng xếp hạng', icon: Award },
+            { to: '/scoreboard', label: 'Chấm chéo & Xếp hạng', icon: Award },
           ],
         },
         {
@@ -132,7 +132,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         { to: '/admin/checkpoints', label: 'Cấu hình chặng nộp', icon: CheckSquare },
         { to: '/admin/criteria', label: 'Tiêu chí chấm điểm', icon: Scale },
         { to: '/admin/personnel', label: 'Cố vấn chuyên môn', icon: GraduationCap },
-        { to: '/admin/results', label: 'Kết quả & Công bố', icon: Award },
+        { to: '/admin/results', label: 'Phòng / Zone & Kết quả 3 vòng', icon: Award },
       ],
     },
     {
